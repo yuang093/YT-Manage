@@ -31,7 +31,15 @@ import {
 // ============================================================================
 // ⚠️ 重要：若要在 Vercel 等外部網站使用雲端資料庫，請在此填入您的 Firebase 設定
 // ============================================================================
-const YOUR_FIREBASE_CONFIG = null; 
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCplYulnlwhbZPWAYCGnP1DNfXNcjmArzs",
+  authDomain: "yt-manoger.firebaseapp.com",
+  projectId: "yt-manoger",
+  storageBucket: "yt-manoger.firebasestorage.app",
+  messagingSenderId: "677759384660",
+  appId: "1:677759384660:web:9b4fe1f618fb463dd441c1"
+};
 
 // --- Firebase 初始化 (智慧判斷模式) ---
 let app = null;
