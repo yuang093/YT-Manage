@@ -88,8 +88,14 @@ const getYouTubeID = (url) => {
 const formatDate = (timestamp) => new Date(timestamp).toLocaleString('zh-TW', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
 });
-const getVideoUrl = (item) => typeof item === 'string' ? item : item.url;
+
+// 安全獲取 URL 與 Title，防止 undefined 錯誤
+const getVideoUrl = (item) => {
+  if (!item) return '';
+  return typeof item === 'string' ? item : item.url;
+};
 const getVideoTitle = (item) => {
+  if (!item) return '';
   if (typeof item === 'string') return item;
   return item.title && item.title.trim() !== '' ? item.title : item.url;
 };
@@ -299,7 +305,6 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
     <div className="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
       <h2 className="text-2xl font-bold mb-6 text-gray-800">建立新頁面</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* ... Same Create Form UI ... */}
         <div>
           <label className="block text-sm font-medium text-gray-700">類型</label>
           <div className="mt-1 flex space-x-4">
@@ -340,7 +345,6 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   );
 };
 
-// --- EditPage, PlayerView, AdminPanel, LoginView (同前, 僅微調) ---
 const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
   const [type, setType] = useState(item.type);
   const [title, setTitle] = useState(item.title);
@@ -400,7 +404,19 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const [vList, setVList] = useState([]);
   const [audio, setAudio] = useState(true);
   useEffect(() => { if (item.type === 'single') setVList([item.url]); else setVList(item.urls); setIdx(0); }, [item]);
+  
   const curItem = vList[idx];
+  
+  // 安全檢查，防止當 vList 為空或索引錯誤時崩潰
+  if (!curItem) {
+     return (
+       <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
+          <button onClick={()=>setView('home')} className="flex items-center mx-auto mb-4 text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
+          載入中或無影片資料...
+       </div>
+     );
+  }
+
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
@@ -408,6 +424,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const next = () => setIdx(shuffle ? Math.floor(Math.random()*vList.length) : (idx+1)%vList.length);
   const prev = () => setIdx((idx-1+vList.length)%vList.length);
   const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
+  
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex justify-between mb-4"><button onClick={()=>setView('home')} className="flex items-center text-gray-500"><SkipBack size={16} className="mr-1"/> 返回</button><button onClick={()=>setAudio(!audio)} className={`flex items-center px-3 py-1 rounded-full text-sm ${audio?'bg-purple-600 text-white':'bg-gray-200'}`}><Music size={16} className="mr-1"/> {audio?'純音樂 ON':'切換純音樂'}</button></div>
@@ -459,7 +476,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [permErr, setPermErr] = useState(false);
 
-  // Define all handlers BEFORE useEffect and return
   const showNotification = (msg, type='success') => { setNotification({msg, type}); setTimeout(()=>setNotification(null), 3000); };
 
   const handleCreate = async (item) => {
