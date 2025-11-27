@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { 
   Play, 
   Shuffle, 
@@ -20,9 +23,16 @@ import {
   Music,
   CheckSquare,
   Square,
-  FileText,
-  CheckCircle2 // 新增圖示
+  FileText
 } from 'lucide-react';
+
+// --- Firebase 初始化 ---
+// 使用環境變數提供的設定
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 // --- 工具函數 ---
 
@@ -56,15 +66,12 @@ const arrayToCSV = (items) => {
   const csvRows = items.map(item => {
     return headers.map(header => {
       let val = item[header];
-      // 處理陣列 (urls)
       if (header === 'urls') {
         val = JSON.stringify(val || []); 
       }
-      // 處理空值
       if (val === undefined || val === null) {
         val = '';
       }
-      // 轉字串並跳脫雙引號 (CSV 標準：將 " 轉為 "")
       const stringVal = String(val).replace(/"/g, '""');
       return `"${stringVal}"`;
     }).join(',');
@@ -99,13 +106,11 @@ const csvToArray = (csvText) => {
     const obj = {};
     headers.forEach((header, index) => {
       let val = values[index];
-      
       if (header === 'urls') {
         try { val = JSON.parse(val); } catch(e) { val = []; }
       } else if (['createdAt', 'visits', 'downloads'].includes(header)) {
         val = Number(val) || 0;
       }
-      
       obj[header] = val;
     });
     result.push(obj);
@@ -283,7 +288,6 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
     }
   };
 
-  // 全選/取消全選功能
   const handleSelectAll = () => {
     if (selectedExistingIds.length === existingSingles.length) {
       setSelectedExistingIds([]);
@@ -457,7 +461,6 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
     }
   };
 
-  // 全選/取消全選功能 (EditPage 也加上)
   const handleSelectAll = () => {
     if (selectedExistingIds.length === existingSingles.length) {
       setSelectedExistingIds([]);
@@ -873,18 +876,37 @@ export default function App() {
   const [view, setView] = useState('home');
   const [activeItem, setActiveItem] = useState(null);
   const [editItem, setEditItem] = useState(null); // 新增狀態：當前編輯的項目
+  const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [notification, setNotification] = useState(null);
 
+  // Auth
   useEffect(() => {
-    const savedItems = localStorage.getItem('yt_manager_items');
-    if (savedItems) {
-      try {
-        setItems(JSON.parse(savedItems));
-      } catch (e) {
-        console.error("資料讀取錯誤", e);
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
       }
-    }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // Data Sync
+  useEffect(() => {
+    if (!user) return;
+    const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items');
+    
+    const unsubscribe = onSnapshot(colRef, (snapshot) => {
+      const loadedItems = snapshot.docs.map(doc => doc.data());
+      // Sort by createdAt desc
+      loadedItems.sort((a, b) => b.createdAt - a.createdAt);
+      setItems(loadedItems);
+    }, (error) => {
+      console.error("Data fetch error:", error);
+    });
 
     // --- 新增：強制設定 Referrer Policy Meta Tag ---
     // 解決 Error 153 問題
@@ -894,6 +916,7 @@ export default function App() {
     document.head.appendChild(meta);
 
     return () => {
+      unsubscribe();
       // 雖然 App 通常不會卸載，但為了良好習慣，這裡可以清除
       try {
         document.head.removeChild(meta);
@@ -901,18 +924,14 @@ export default function App() {
         // 忽略移除錯誤
       }
     }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('yt_manager_items', JSON.stringify(items));
-  }, [items]);
+  }, [user]);
 
   const showNotification = (msg, type = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleCreate = (newItem) => {
+  const handleCreate = async (newItem) => {
     const item = {
       ...newItem,
       id: generateId(),
@@ -920,18 +939,28 @@ export default function App() {
       visits: 0,
       downloads: 0,
     };
-    setItems([item, ...items]);
-    showNotification('建立成功！');
-    setView('home');
+    
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), item);
+      showNotification('建立成功！');
+      setView('home');
+    } catch (e) {
+      showNotification('建立失敗: ' + e.message, 'error');
+    }
   };
 
   // 新增：處理更新邏輯
-  const handleUpdate = (updatedItem) => {
-    const newItems = items.map(i => i.id === updatedItem.id ? { ...i, ...updatedItem } : i);
-    setItems(newItems);
-    showNotification('更新成功！');
-    setEditItem(null);
-    setView('admin');
+  const handleUpdate = async (updatedItem) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', updatedItem.id), updatedItem, { merge: true });
+      showNotification('更新成功！');
+      setEditItem(null);
+      setView('admin');
+    } catch (e) {
+      showNotification('更新失敗: ' + e.message, 'error');
+    }
   };
 
   // 新增：進入編輯模式
@@ -940,10 +969,15 @@ export default function App() {
     setView('edit');
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('確定要刪除這個項目嗎？')) {
-      setItems(items.filter(i => i.id !== id));
-      showNotification('已刪除項目');
+      if (!user) return;
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id));
+        showNotification('已刪除項目');
+      } catch (e) {
+        showNotification('刪除失敗: ' + e.message, 'error');
+      }
     }
   };
 
@@ -982,12 +1016,23 @@ export default function App() {
   const handleImport = (event) => {
     const fileReader = new FileReader();
     fileReader.readAsText(event.target.files[0], "UTF-8");
-    fileReader.onload = e => {
+    fileReader.onload = async e => {
       try {
         const parsedItems = csvToArray(e.target.result);
         if (parsedItems && parsedItems.length > 0) {
-          setItems(parsedItems);
-          showNotification('CSV 匯入成功');
+          // 匯入到 Firestore
+          if (!user) return;
+          
+          let successCount = 0;
+          for (const item of parsedItems) {
+             // 確保 ID 存在
+             const itemId = item.id || generateId();
+             const itemToSave = { ...item, id: itemId };
+             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', itemId), itemToSave);
+             successCount++;
+          }
+          
+          showNotification(`CSV 匯入成功 (${successCount} 筆)`);
         } else {
           showNotification('CSV 格式錯誤或無資料', 'error');
         }
@@ -998,21 +1043,42 @@ export default function App() {
     };
   };
 
-  const viewItem = (item) => {
-    const updatedItems = items.map(i => 
-      i.id === item.id ? { ...i, visits: (i.visits || 0) + 1 } : i
-    );
-    setItems(updatedItems);
-    setActiveItem(item);
+  const viewItem = async (item) => {
+    // 更新訪問次數
+    if (user) {
+       const newVisits = (item.visits || 0) + 1;
+       // Optimistic update local state not needed as onSnapshot will handle it, 
+       // but we set active item immediately for UI responsiveness
+       setActiveItem({ ...item, visits: newVisits }); 
+       
+       try {
+         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), {
+           visits: newVisits
+         });
+       } catch (e) {
+         console.error("Error updating visits", e);
+       }
+    } else {
+       setActiveItem(item);
+    }
+    
     setView('view');
   };
 
-  const recordDownload = (itemId) => {
-    const updatedItems = items.map(i => 
-      i.id === itemId ? { ...i, downloads: (i.downloads || 0) + 1 } : i
-    );
-    setItems(updatedItems);
-    showNotification('已記錄下載/點擊次數');
+  const recordDownload = async (itemId) => {
+    if (!user) return;
+    const item = items.find(i => i.id === itemId);
+    if (item) {
+      const newDownloads = (item.downloads || 0) + 1;
+      try {
+         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', itemId), {
+           downloads: newDownloads
+         });
+         showNotification('已記錄下載/點擊次數');
+      } catch (e) {
+         console.error("Error updating downloads", e);
+      }
+    }
   };
 
   return (
