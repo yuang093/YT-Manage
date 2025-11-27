@@ -8,6 +8,7 @@ import {
   List, 
   Settings, 
   Trash2, 
+  Edit, // 新增 Edit 圖示
   Download, 
   Upload, 
   ExternalLink, 
@@ -80,7 +81,6 @@ const csvToArray = (csvText) => {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    // 使用正規表達式解析 CSV 行，處理包含逗號的引號字串
     const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
     const values = [];
     let match;
@@ -372,6 +372,158 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   );
 };
 
+// --- 新增：編輯頁面元件 ---
+const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
+  const [type, setType] = useState(item.type);
+  const [title, setTitle] = useState(item.title);
+  const [description, setDescription] = useState(item.description);
+  const [url, setUrl] = useState(item.type === 'single' ? item.url : '');
+  // 播放清單的連結
+  const [playlistUrls, setPlaylistUrls] = useState(item.type === 'playlist' ? item.urls : ['']); 
+  // 從現有項目選擇的部分，這裡為了簡化編輯，我們將原有的 urls 載入到手動輸入框，
+  // 這樣使用者可以看見所有連結並進行編輯、排序或刪除，比較直觀。
+  
+  const existingSingles = items.filter(i => i.type === 'single');
+  const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
+
+  // 初始化時，如果編輯播放清單，確保至少有一個空欄位
+  useEffect(() => {
+    if (type === 'playlist' && playlistUrls.length === 0) {
+      setPlaylistUrls(['']);
+    }
+  }, []);
+
+  const handlePlaylistUrlChange = (index, value) => {
+    const newUrls = [...playlistUrls];
+    newUrls[index] = value;
+    setPlaylistUrls(newUrls);
+  };
+
+  const addPlaylistField = () => setPlaylistUrls([...playlistUrls, '']);
+  const removePlaylistField = (index) => {
+    const newUrls = playlistUrls.filter((_, i) => i !== index);
+    setPlaylistUrls(newUrls);
+  };
+
+  const toggleSelection = (itemId) => {
+    if (selectedExistingIds.includes(itemId)) {
+      setSelectedExistingIds(selectedExistingIds.filter(id => id !== itemId));
+    } else {
+      setSelectedExistingIds([...selectedExistingIds, itemId]);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (type === 'single') {
+      if (!getYouTubeID(url)) {
+        showNotification('無效的 YouTube 連結', 'error');
+        return;
+      }
+      handleUpdate({ ...item, type, title, description, url });
+    } else {
+      const manualValidUrls = playlistUrls.filter(u => getYouTubeID(u));
+      const selectedUrls = existingSingles
+        .filter(item => selectedExistingIds.includes(item.id))
+        .map(item => item.url);
+
+      const finalUrls = [...manualValidUrls, ...selectedUrls];
+
+      if (finalUrls.length === 0) {
+        showNotification('請至少輸入或選擇一個有效的 YouTube 連結', 'error');
+        return;
+      }
+      handleUpdate({ ...item, type, title, description, urls: finalUrls });
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center">
+        <Edit className="mr-2" /> 修改頁面
+      </h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">類型 (不可修改)</label>
+          <div className="mt-1">
+            <span className={`px-2 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${type === 'playlist' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800'}`}>
+              {type === 'playlist' ? '播放清單' : '單曲'}
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">主旨 (標題)</label>
+          <input required type="text" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 border p-2" value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">說明</label>
+          <textarea className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 border p-2" rows="3" value={description} onChange={e => setDescription(e.target.value)}></textarea>
+        </div>
+
+        {type === 'single' ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">YouTube 連結</label>
+            <input required type="url" placeholder="https://www.youtube.com/watch?v=..." className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 border p-2" value={url} onChange={e => setUrl(e.target.value)} />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-2">加入更多單曲 (從現有庫)</label>
+              {existingSingles.length === 0 ? (
+                <p className="text-sm text-gray-500">目前沒有其他單曲可供選擇。</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {existingSingles.map(item => (
+                    <div 
+                      key={item.id} 
+                      className={`flex items-center p-2 rounded cursor-pointer border ${selectedExistingIds.includes(item.id) ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200 hover:bg-gray-100'}`}
+                      onClick={() => toggleSelection(item.id)}
+                    >
+                      <div className={`mr-2 ${selectedExistingIds.includes(item.id) ? 'text-red-600' : 'text-gray-400'}`}>
+                          {selectedExistingIds.includes(item.id) ? <CheckSquare size={20}/> : <Square size={20}/>}
+                      </div>
+                      <span className="text-sm truncate select-none">{item.title}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">編輯連結列表</label>
+              {playlistUrls.map((pUrl, idx) => (
+                <div key={idx} className="flex mb-2">
+                  <input 
+                    type="url" 
+                    placeholder={`影片連結 ${idx + 1}`}
+                    className="flex-1 rounded-l-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500"
+                    value={pUrl}
+                    onChange={e => handlePlaylistUrlChange(idx, e.target.value)}
+                  />
+                  <button type="button" onClick={() => removePlaylistField(idx)} className="bg-gray-100 px-3 border border-l-0 rounded-r-md hover:bg-gray-200">
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={addPlaylistField} className="text-sm text-red-600 hover:text-red-800 font-medium flex items-center mt-2">
+                <Plus size={16} className="mr-1"/> 新增連結欄位
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="pt-4 flex justify-end space-x-3">
+          <button type="button" onClick={() => setView('admin')} className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">儲存修改</button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isShuffle, setIsShuffle] = useState(false);
@@ -533,7 +685,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   );
 };
 
-const AdminPanel = ({ items, handleDelete, handleImport, handleExport }) => {
+const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport }) => {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
@@ -576,8 +728,11 @@ const AdminPanel = ({ items, handleDelete, handleImport, handleExport }) => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {item.visits || 0} / {item.downloads || 0}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button onClick={() => handleDelete(item.id)} className="text-red-600 hover:text-red-900 flex items-center">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                  <button onClick={() => openEdit(item)} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center">
+                    <Edit size={16} className="mr-1" /> 修改
+                  </button>
+                  <button onClick={() => handleDelete(item.id)} className="text-red-600 hover:text-red-900 inline-flex items-center">
                     <Trash2 size={16} className="mr-1" /> 刪除
                   </button>
                 </td>
@@ -649,6 +804,7 @@ export default function App() {
   const [items, setItems] = useState([]);
   const [view, setView] = useState('home');
   const [activeItem, setActiveItem] = useState(null);
+  const [editItem, setEditItem] = useState(null); // 新增狀態：當前編輯的項目
   const [isAdmin, setIsAdmin] = useState(false);
   const [notification, setNotification] = useState(null);
 
@@ -699,6 +855,21 @@ export default function App() {
     setItems([item, ...items]);
     showNotification('建立成功！');
     setView('home');
+  };
+
+  // 新增：處理更新邏輯
+  const handleUpdate = (updatedItem) => {
+    const newItems = items.map(i => i.id === updatedItem.id ? { ...i, ...updatedItem } : i);
+    setItems(newItems);
+    showNotification('更新成功！');
+    setEditItem(null);
+    setView('admin');
+  };
+
+  // 新增：進入編輯模式
+  const openEdit = (item) => {
+    setEditItem(item);
+    setView('edit');
   };
 
   const handleDelete = (id) => {
@@ -790,9 +961,10 @@ export default function App() {
         <div className="px-4 py-4 sm:px-0">
           {view === 'home' && <Dashboard items={items} viewItem={viewItem} />}
           {view === 'create' && <CreatePage items={items} handleCreate={handleCreate} setView={setView} showNotification={showNotification} />}
+          {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification} />}
           {view === 'view' && activeItem && <PlayerView item={activeItem} setView={setView} recordDownload={recordDownload} />}
           {view === 'login' && <LoginView onLogin={handleLogin} setView={setView} />}
-          {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} handleImport={handleImport} handleExport={handleExport} />}
+          {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={openEdit} handleImport={handleImport} handleExport={handleExport} />}
         </div>
       </main>
     </div>
