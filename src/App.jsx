@@ -25,17 +25,12 @@ import {
   Square,
   FileText,
   Cloud,
-  HardDrive,
-  AlertTriangle,
-  CheckCircle
+  HardDrive
 } from 'lucide-react';
 
 // ============================================================================
 // ⚠️ 重要：若要在 Vercel 等外部網站使用雲端資料庫，請在此填入您的 Firebase 設定
 // ============================================================================
-// 1. 前往 https://console.firebase.google.com/ 建立專案
-// 2. 新增 Web App，複製 firebaseConfig 物件內容
-// 3. 將 null 替換為您的設定物件，例如： { apiKey: "...", authDomain: "...", ... }
 const YOUR_FIREBASE_CONFIG = null; 
 
 // --- Firebase 初始化 (智慧判斷模式) ---
@@ -44,18 +39,18 @@ let auth = null;
 let db = null;
 let appId = 'default-app-id';
 let isCloudAvailable = false;
-let configSource = 'none'; // 'env' (開發環境) or 'manual' (手動填寫) or 'none'
+let configSource = 'none';
 
 try {
   let configToUse = null;
 
-  // 優先檢查是否在開發環境 (Canvas)
+  // 1. 優先檢查是否在開發環境 (Canvas)
   if (typeof __firebase_config !== 'undefined' && __firebase_config) {
     configToUse = JSON.parse(__firebase_config);
     if (typeof __app_id !== 'undefined') appId = __app_id;
     configSource = 'env';
   } 
-  // 其次檢查是否有手動填寫的設定 (Vercel/Production)
+  // 2. 其次檢查是否有手動填寫的設定 (Vercel/Production)
   else if (YOUR_FIREBASE_CONFIG) {
     configToUse = YOUR_FIREBASE_CONFIG;
     configSource = 'manual';
@@ -174,14 +169,15 @@ const Header = ({ setView, isAdmin, handleLogout }) => (
 
 const Dashboard = ({ items, viewItem }) => {
   const [filter, setFilter] = useState('all'); 
+  const safeItems = items || [];
   const stats = {
-    totalItems: items.length,
-    totalVisits: items.reduce((acc, curr) => acc + (curr.visits || 0), 0),
-    totalDownloads: items.reduce((acc, curr) => acc + (curr.downloads || 0), 0),
-    playlists: items.filter(i => i.type === 'playlist').length,
-    singles: items.filter(i => i.type === 'single').length,
+    totalItems: safeItems.length,
+    totalVisits: safeItems.reduce((acc, curr) => acc + (curr.visits || 0), 0),
+    totalDownloads: safeItems.reduce((acc, curr) => acc + (curr.downloads || 0), 0),
+    playlists: safeItems.filter(i => i.type === 'playlist').length,
+    singles: safeItems.filter(i => i.type === 'single').length,
   };
-  const filteredItems = items.filter(item => {
+  const filteredItems = safeItems.filter(item => {
     if (filter === 'all') return true;
     return item.type === filter;
   });
@@ -574,6 +570,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 };
 
 const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport }) => {
+  const safeItems = items || [];
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="bg-blue-50 p-4 border-b border-blue-100">
@@ -589,8 +586,8 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport 
           <div className="flex items-center">
             <span className="text-gray-500 mr-2">設定檔狀態:</span>
             {isCloudAvailable ? 
-              <span className="text-green-600 font-bold flex items-center"><CheckCircle size={12} className="mr-1"/> 已載入</span> : 
-              <span className="text-red-600 font-bold flex items-center"><AlertTriangle size={12} className="mr-1"/> 未偵測到</span>
+              <span className="text-green-600 font-bold flex items-center">✅ 已載入</span> : 
+              <span className="text-red-600 font-bold flex items-center">⚠️ 未偵測到</span>
             }
           </div>
           <div className="flex items-center">
@@ -617,7 +614,7 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport 
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {items.map((item) => (
+            {safeItems.map((item) => (
               <tr key={item.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{item.title}</div>
@@ -631,7 +628,7 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport 
                 </td>
               </tr>
             ))}
-            {items.length === 0 && <tr><td colSpan="4" className="px-6 py-4 text-center text-gray-500">無資料</td></tr>}
+            {safeItems.length === 0 && <tr><td colSpan="4" className="px-6 py-4 text-center text-gray-500">無資料</td></tr>}
           </tbody>
         </table>
       </div>
@@ -775,6 +772,23 @@ export default function App() {
         showNotification('已從本機刪除');
       }
     }
+  };
+
+  // 新增: 補回遺失的 handleExport 函式
+  const handleExport = () => {
+    // 改為 CSV 匯出
+    const csvContent = arrayToCSV(items);
+    // 加入 BOM 以支援 Excel 中文顯示
+    const bom = "\uFEFF"; 
+    const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(bom + csvContent);
+    
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "youtube_manager_backup.csv");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    showNotification('CSV 匯出成功');
   };
 
   // Import logic updated for hybrid
