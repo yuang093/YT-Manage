@@ -806,7 +806,7 @@ export default function App() {
         </div>
       </main>
       {/* 狀態指示燈 */}
-      <div className="fixed bottom-4 left-4 px-3 py-1 bg-white rounded-full shadow-md border text-xs flex items-center text-gray-500 opacity-70 hover:opacity-100 transition-opacity">
+      <div className="fixed bottom-4 left-4 z-50 px-3 py-1 bg-white shadow-lg border border-gray-200 rounded-full text-xs font-medium flex items-center text-gray-600">
         {isCloudAvailable ? (
           <><Cloud size={12} className="mr-1 text-blue-500" /> 雲端模式 (Firebase)</>
         ) : (
