@@ -422,7 +422,9 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
-  const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1` : '';
+  // 修正: 加入 origin, widgetid 等參數以支援 API 通訊
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1&origin=${origin}&widgetid=1` : '';
 
   const togglePlay = () => {
     const cmd = isPlaying ? 'pauseVideo' : 'playVideo';
@@ -450,18 +452,23 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     nextRef.current = next;
   }, [next]);
 
+  // 優化: 監聽 YouTube 狀態
   useEffect(() => {
      const handleMessage = (event) => {
+        // 確保來源是 YouTube
+        if (!event.origin.includes('youtube') && !event.origin.includes('youtube-nocookie')) return;
+
         if (event.data && typeof event.data === 'string') {
            try {
              const data = JSON.parse(event.data);
-             if (data.event === 'infoDelivery' && data.info && typeof data.info.playerState === 'number') {
+             // 檢查是否為狀態變更事件
+             if (data.event === 'infoDelivery' && data.info && data.info.playerState !== undefined) {
                const state = data.info.playerState;
-               if (state === 1 || state === 3) setIsPlaying(true);
-               else if (state === 2 || state === -1) setIsPlaying(false);
-               else if (state === 0) {
+               if (state === 1) setIsPlaying(true); // Playing
+               else if (state === 2) setIsPlaying(false); // Paused
+               else if (state === 0) { // Ended
                  setIsPlaying(false);
-                 if (nextRef.current) nextRef.current();
+                 if (nextRef.current) nextRef.current(); // 自動下一首
                }
              }
            } catch(e){}
@@ -489,19 +496,19 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           </button>
       </div>
 
-      {/* 播放器區域 */}
-      <div className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-300 ${audio ? 'h-64' : 'aspect-video'}`}>
+      {/* 播放器區域 (3. 純音樂模式自動縮小) */}
+      <div className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-300 ${audio ? 'h-48' : 'aspect-video'}`}>
         
         {/* Audio Mode Overlay */}
         {audio && (
           <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8 pointer-events-none">
              <Music size={40} className={`mb-4 ${isPlaying ? 'animate-pulse text-green-400' : 'text-gray-500'}`}/>
-             <h3 className="text-xl font-bold">{isPlaying ? '正在播放' : '已暫停 (點擊播放)'}</h3>
+             <h3 className="text-xl font-bold">{isPlaying ? '正在播放' : '已暫停 (點擊下方播放)'}</h3>
              <p className="text-gray-400 text-sm mt-2 text-center line-clamp-2">{curTitle}</p>
           </div>
         )}
         
-        {/* Iframe */}
+        {/* Iframe (隱藏但存在) */}
         <iframe 
           ref={iframeRef}
           className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`} 
@@ -513,20 +520,20 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         ></iframe>
       </div>
 
-      {/* 1. 控制列 */}
+      {/* 1. 控制列 (移至下方，不遮擋畫面) */}
       <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between border-t-4 border-red-600">
          <div className="flex items-center space-x-4">
-            <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg">
+            <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg flex-shrink-0">
               {isPlaying ? <Pause size={24} fill="currentColor"/> : <Play size={24} fill="currentColor" className="ml-1"/>}
             </button>
-            <div>
+            <div className="min-w-0">
               <div className="text-xs text-gray-500 font-bold uppercase">Now Playing</div>
-              <div className="font-medium text-gray-900 truncate max-w-[150px] sm:max-w-md">{curTitle}</div>
+              <div className="font-medium text-gray-900 truncate">{curTitle}</div>
             </div>
          </div>
          
          {item.type === 'playlist' && (
-           <div className="flex items-center space-x-2">
+           <div className="flex items-center space-x-2 flex-shrink-0">
              <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full ${shuffle?'bg-indigo-100 text-indigo-600':'text-gray-400 hover:bg-gray-100'}`}><Shuffle size={20}/></button>
              <button onClick={prev} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipBack size={20}/></button>
              <button onClick={next} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipForward size={20}/></button>
