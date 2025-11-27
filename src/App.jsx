@@ -407,7 +407,6 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   
   const curItem = vList[idx];
   
-  // 安全檢查，防止當 vList 為空或索引錯誤時崩潰
   if (!curItem) {
      return (
        <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
@@ -420,7 +419,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
-  const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1` : '';
+  // 加入 playsinline=1 以支援手機內嵌播放
+  const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1` : '';
   const next = () => setIdx(shuffle ? Math.floor(Math.random()*vList.length) : (idx+1)%vList.length);
   const prev = () => setIdx((idx-1+vList.length)%vList.length);
   const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
@@ -429,8 +429,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex justify-between mb-4"><button onClick={()=>setView('home')} className="flex items-center text-gray-500"><SkipBack size={16} className="mr-1"/> 返回</button><button onClick={()=>setAudio(!audio)} className={`flex items-center px-3 py-1 rounded-full text-sm ${audio?'bg-purple-600 text-white':'bg-gray-200'}`}><Music size={16} className="mr-1"/> {audio?'純音樂 ON':'切換純音樂'}</button></div>
       <div className="relative rounded-xl overflow-hidden shadow-2xl bg-black">
-        {audio && <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8"><Music size={40} className="mb-4 animate-pulse"/><h3 className="text-xl font-bold">正在播放音訊</h3><p className="text-gray-400 text-sm">{curTitle}</p></div>}
-        <div className={`${audio?'opacity-0 h-16 pointer-events-none':'aspect-video'} w-full`}><iframe width="100%" height="100%" src={embed} frameBorder="0" allow="autoplay; encrypted-media" allowFullScreen></iframe></div>
+        {/* Audio Overlay: 加入 pointer-events-none 讓點擊穿透到 iframe */}
+        {audio && <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8 pointer-events-none"><Music size={40} className="mb-4 animate-pulse"/><h3 className="text-xl font-bold">正在播放音訊</h3><p className="text-gray-400 text-sm">{curTitle}</p></div>}
+        {/* Iframe Container: 移除 pointer-events-none, 保持 aspect-video 以維持大小 */}
+        <div className={`aspect-video w-full ${audio?'opacity-0':''}`}><iframe width="100%" height="100%" src={embed} frameBorder="0" allow="autoplay; encrypted-media" allowFullScreen></iframe></div>
       </div>
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between"><div><h1 className="text-2xl font-bold">{item.title}</h1><p className="text-gray-600">{item.description}</p></div><button onClick={openLink} className="px-4 py-2 bg-blue-600 text-white rounded flex items-center"><ExternalLink size={18} className="mr-2"/> 下載</button></div>
