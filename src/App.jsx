@@ -403,31 +403,25 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
 
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
-  const [shuffle, setShuffle] = useState(true); // 5. 預設開啟隨機播放
+  const [shuffle, setShuffle] = useState(true); 
   const [vList, setVList] = useState([]);
   const [audio, setAudio] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false); 
   const iframeRef = useRef(null); 
-  // 新增: 用於儲存最新的 next 函式，供 event listener 呼叫
   const nextRef = useRef(null);
 
-  useEffect(() => { if (item.type === 'single') setVList([item.url]); else setVList(item.urls); setIdx(0); setIsPlaying(false); }, [item]);
+  useEffect(() => { 
+    if (item.type === 'single') setVList([item.url]); 
+    else setVList(item.urls); 
+    setIdx(0); 
+    setIsPlaying(false); 
+  }, [item]);
   
   const curItem = vList[idx];
   
-  if (!curItem) {
-     return (
-       <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
-          <button onClick={()=>setView('home')} className="flex items-center mx-auto mb-4 text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
-          載入中或無影片資料...
-       </div>
-     );
-  }
-
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
-  // 加入 enablejsapi=1 以支援遠端控制
   const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1` : '';
 
   const togglePlay = () => {
@@ -438,12 +432,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         func: cmd,
         args: []
       }), '*');
-      // 樂觀更新 (立即反應，不用等監聽事件)
       setIsPlaying(!isPlaying);
     }
   };
 
-  // 定義切換上下首邏輯
   const next = () => { 
     setIdx(shuffle ? Math.floor(Math.random()*vList.length) : (idx+1)%vList.length); 
     setIsPlaying(false); 
@@ -452,13 +444,12 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     setIdx((idx-1+vList.length)%vList.length); 
     setIsPlaying(false); 
   };
+  const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
   
-  // 確保 nextRef 永遠是最新的
   useEffect(() => {
     nextRef.current = next;
   }, [next]);
 
-  // 監聽 YouTube 狀態 (2. 狀態同步)
   useEffect(() => {
      const handleMessage = (event) => {
         if (event.data && typeof event.data === 'string') {
@@ -466,11 +457,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
              const data = JSON.parse(event.data);
              if (data.event === 'infoDelivery' && data.info && typeof data.info.playerState === 'number') {
                const state = data.info.playerState;
-               // 1 = Playing, 3 = Buffering (都算播放中)
                if (state === 1 || state === 3) setIsPlaying(true);
-               // 2 = Paused, -1 = Unstarted
                else if (state === 2 || state === -1) setIsPlaying(false);
-               // 0 = Ended -> 觸發下一首 (呼叫 ref 以取得最新 closure)
                else if (state === 0) {
                  setIsPlaying(false);
                  if (nextRef.current) nextRef.current();
@@ -483,7 +471,14 @@ const PlayerView = ({ item, setView, recordDownload }) => {
      return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
+  if (!curItem) {
+     return (
+       <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
+          <button onClick={()=>setView('home')} className="flex items-center mx-auto mb-4 text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
+          載入中...
+       </div>
+     );
+  }
   
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -494,10 +489,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           </button>
       </div>
 
-      {/* 播放器區域 (3. 純音樂模式自動縮小) */}
+      {/* 播放器區域 */}
       <div className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-300 ${audio ? 'h-64' : 'aspect-video'}`}>
         
-        {/* Audio Mode Overlay (視覺遮罩) - pointer-events-none 讓點擊穿透 */}
+        {/* Audio Mode Overlay */}
         {audio && (
           <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8 pointer-events-none">
              <Music size={40} className={`mb-4 ${isPlaying ? 'animate-pulse text-green-400' : 'text-gray-500'}`}/>
@@ -506,7 +501,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           </div>
         )}
         
-        {/* Iframe (隱藏但存在) */}
+        {/* Iframe */}
         <iframe 
           ref={iframeRef}
           className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`} 
@@ -518,7 +513,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         ></iframe>
       </div>
 
-      {/* 1. 控制列 (移至下方，不遮擋畫面) */}
+      {/* 1. 控制列 */}
       <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between border-t-4 border-red-600">
          <div className="flex items-center space-x-4">
             <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg">
