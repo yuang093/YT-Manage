@@ -422,7 +422,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
-  // 修正: 加入 origin, widgetid 等參數以支援 API 通訊
+  // 修正: 確保 origin 準確以接收 postMessage
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1&origin=${origin}&widgetid=1` : '';
 
@@ -434,6 +434,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         func: cmd,
         args: []
       }), '*');
+      // 樂觀更新UI
       setIsPlaying(!isPlaying);
     }
   };
@@ -452,23 +453,32 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     nextRef.current = next;
   }, [next]);
 
-  // 優化: 監聽 YouTube 狀態
+  // 強化版 YouTube 監聽器
   useEffect(() => {
      const handleMessage = (event) => {
-        // 確保來源是 YouTube
-        if (!event.origin.includes('youtube') && !event.origin.includes('youtube-nocookie')) return;
+        // 寬鬆檢查來源，確保來自 YouTube
+        if (!event.origin.match(/youtube(-nocookie)?\.com$/)) return;
 
         if (event.data && typeof event.data === 'string') {
            try {
              const data = JSON.parse(event.data);
-             // 檢查是否為狀態變更事件
-             if (data.event === 'infoDelivery' && data.info && data.info.playerState !== undefined) {
+             
+             // 偵測兩種常見的 YouTube 狀態事件格式
+             const isStateChange = data.event === 'onStateChange' || data.event === 'infoDelivery';
+             
+             if (isStateChange && data.info && typeof data.info.playerState === 'number') {
                const state = data.info.playerState;
-               if (state === 1) setIsPlaying(true); // Playing
-               else if (state === 2) setIsPlaying(false); // Paused
-               else if (state === 0) { // Ended
+               
+               // 狀態對應: 1=播放中, 3=緩衝中, 2=暫停, 0=結束, -1=未開始
+               if (state === 1 || state === 3) {
+                 setIsPlaying(true);
+               } else if (state === 2 || state === -1) {
                  setIsPlaying(false);
-                 if (nextRef.current) nextRef.current(); // 自動下一首
+               } else if (state === 0) {
+                 // 播放結束 -> 觸發下一首
+                 setIsPlaying(false);
+                 console.log("Video ended, playing next...");
+                 if (nextRef.current) nextRef.current(); 
                }
              }
            } catch(e){}
@@ -511,6 +521,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         {/* Iframe (隱藏但存在) */}
         <iframe 
           ref={iframeRef}
+          key={embed} // 強制重新渲染以確保切換順暢
           className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`} 
           src={embed} 
           title="YouTube video player" 
