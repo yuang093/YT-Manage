@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { 
   Play, 
   Shuffle, 
@@ -22,16 +25,17 @@ import {
   Square,
   FileText,
   Cloud,
+  HardDrive,
+  AlertTriangle,
+  CheckCircle,
   Loader2,
   ShieldAlert
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 
-// --- Firebase 初始化設定 (參考您提供的範例寫法) ---
-// 邏輯：如果是預覽環境(有 __firebase_config)則使用預覽設定；否則使用您提供的正式設定
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+// ============================================================================
+// ⚠️ 重要：若要在 Vercel 等外部網站使用雲端資料庫，請在此填入您的 Firebase 設定
+// ============================================================================
+const YOUR_FIREBASE_CONFIG = {
   apiKey: "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
   authDomain: "yt-manager-995a5.firebaseapp.com",
   projectId: "yt-manager-995a5",
@@ -40,15 +44,40 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
   appId: "1:188108532520:web:76f89808fa5e919bc1be1d"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// --- Firebase 初始化 (智慧判斷模式) ---
+let app = null;
+let auth = null;
+let db = null;
+let appId = 'default-app-id';
+let isCloudAvailable = false;
+let configSource = 'none';
 
-// 資料庫集合路徑設定
-// 在預覽環境使用系統分配的 ID，在 Vercel 等正式環境使用固定的 'yt-manager-global'
-// 這確保了所有外部使用者都連線到同一個資料庫路徑，實現跨裝置同步
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'yt-manager-global';
+try {
+  let configToUse = null;
+
+  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    configToUse = JSON.parse(__firebase_config);
+    if (typeof __app_id !== 'undefined') appId = __app_id;
+    configSource = 'env';
+  } 
+  else if (YOUR_FIREBASE_CONFIG) {
+    configToUse = YOUR_FIREBASE_CONFIG;
+    configSource = 'manual';
+  }
+
+  if (configToUse) {
+    app = initializeApp(configToUse);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    isCloudAvailable = true;
+    console.log(`Firebase initialized successfully using ${configSource} config.`);
+  } else {
+    console.log("No Firebase config found. Running in LocalStorage mode.");
+  }
+} catch (e) {
+  console.warn("Firebase init failed:", e);
+  isCloudAvailable = false;
+}
 
 // --- 工具函數 ---
 
@@ -93,28 +122,52 @@ const arrayToCSV = (items) => {
 };
 
 const csvToArray = (csvText) => {
-  const lines = csvText.trim().split('\n');
+  // 支援 \r\n (Windows) 與 \n (Unix) 換行
+  const lines = csvText.trim().split(/\r\n|\n/);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim());
+  
+  // 處理標頭
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   const result = [];
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
+    // 簡單的 CSV Regex 解析，處理雙引號包覆的內容
     const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
     const values = [];
     let match;
+    
     while ((match = regex.exec(line)) !== null) {
-      if (match[1] !== undefined) values.push(match[1].replace(/""/g, '"'));
-      else values.push(match[2]);
+      if (match[1] !== undefined) {
+        values.push(match[1].replace(/""/g, '"'));
+      } else {
+        values.push(match[2]);
+      }
     }
-    if (values.length < headers.length) continue;
+
+    // 確保至少讀取到資料 (允許最後一欄為空)
+    if (values.length === 0) continue;
+
     const obj = {};
     headers.forEach((header, index) => {
       let val = values[index];
-      if (header === 'urls') { try { val = JSON.parse(val); } catch(e) { val = []; } } 
-      else if (['createdAt', 'visits', 'downloads'].includes(header)) val = Number(val) || 0;
+      
+      // ⚠️ 重要修正：Firebase 不接受 undefined，必須轉為空字串或預設值
+      if (val === undefined) val = '';
+
+      if (header === 'urls') { 
+        try { val = JSON.parse(val); } catch(e) { val = []; } 
+      } else if (['createdAt', 'visits', 'downloads'].includes(header)) {
+        val = Number(val) || 0;
+      }
+      
       obj[header] = val;
     });
-    result.push(obj);
+    
+    // 簡單驗證：必須要有 title 或 url 才有意義
+    if (obj.title || obj.url) {
+        result.push(obj);
+    }
   }
   return result;
 };
@@ -263,6 +316,7 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
+  // manualItems: [{title: '', url: ''}]
   const [manualItems, setManualItems] = useState([{title: '', url: ''}]); 
   const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
 
@@ -299,6 +353,7 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
       if (!getYouTubeID(url)) return showNotification('無效的 YouTube 連結', 'error');
       handleCreate({ type, title, description, url });
     } else {
+      // 1. 處理手動輸入的
       const validManualItems = manualItems
         .filter(item => getYouTubeID(item.url))
         .map(item => ({ 
@@ -306,6 +361,7 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
           title: item.title || item.url 
         }));
 
+      // 2. 處理從現有庫選擇的
       const selectedItems = existingSingles
         .filter(item => selectedExistingIds.includes(item.id))
         .map(item => ({
@@ -629,14 +685,20 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div className="flex items-center">
             <span className="text-gray-500 mr-2">目前資料模式:</span>
-            <span className="text-green-600 font-bold flex items-center"><Cloud size={12} className="mr-1"/> 雲端 (Firebase)</span>
+            {isCloudAvailable ? 
+              <span className="text-green-600 font-bold flex items-center"><Cloud size={12} className="mr-1"/> 雲端 (Firebase)</span> : 
+              <span className="text-orange-600 font-bold flex items-center"><HardDrive size={12} className="mr-1"/> 本機 (LocalStorage)</span>
+            }
           </div>
           <div className="flex items-center">
-            <span className="text-gray-500 mr-2">權限狀態:</span>
-            <span className="text-green-600 font-bold flex items-center">✅ 連線正常</span>
+            <span className="text-gray-500 mr-2">設定檔狀態:</span>
+            {isCloudAvailable ? 
+              <span className="text-green-600 font-bold flex items-center">✅ 已載入</span> : 
+              <span className="text-red-600 font-bold flex items-center">⚠️ 未偵測到</span>
+            }
           </div>
           <div className="flex items-center">
-             <span className="text-gray-400 font-mono text-[10px]">Target: yt-manager-global</span>
+             {!isCloudAvailable && <span className="text-gray-400">(請在程式碼頂端填寫 YOUR_FIREBASE_CONFIG)</span>}
           </div>
         </div>
       </div>
@@ -815,13 +877,18 @@ export default function App() {
     showNotification('CSV 匯出成功');
   };
 
+  // 修正 handleImport 以正確處理 BOM 和 Undefined
   const handleImport = (event) => {
     const fileReader = new FileReader();
     fileReader.readAsText(event.target.files[0], "UTF-8");
     fileReader.onload = async e => {
       try {
-        const parsedItems = csvToArray(e.target.result);
+        const text = e.target.result;
+        // 修正: 移除 BOM
+        const content = text.startsWith('\uFEFF') ? text.slice(1) : text;
+        const parsedItems = csvToArray(content);
         if (parsedItems && parsedItems.length > 0) {
+          // 如果是雲端模式 (總是為真)
           let successCount = 0;
           for (const item of parsedItems) {
              const itemId = item.id || generateId();
