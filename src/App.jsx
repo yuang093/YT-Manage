@@ -408,36 +408,18 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const [audio, setAudio] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false); 
   const iframeRef = useRef(null); 
+  // 新增: 用於儲存最新的 next 函式，供 event listener 呼叫
+  const nextRef = useRef(null);
 
   useEffect(() => { if (item.type === 'single') setVList([item.url]); else setVList(item.urls); setIdx(0); setIsPlaying(false); }, [item]);
   
   const curItem = vList[idx];
   
-  // 監聽 YouTube 狀態 (2. 狀態同步)
-  useEffect(() => {
-     const handleMessage = (event) => {
-        if (event.data && typeof event.data === 'string') {
-           try {
-             const data = JSON.parse(event.data);
-             if (data.event === 'infoDelivery' && data.info && typeof data.info.playerState === 'number') {
-               const state = data.info.playerState;
-               // 1 = Playing, 3 = Buffering (都算播放中)
-               if (state === 1 || state === 3) setIsPlaying(true);
-               // 2 = Paused, 0 = Ended, -1 = Unstarted
-               else if (state === 2 || state === 0 || state === -1) setIsPlaying(false);
-             }
-           } catch(e){}
-        }
-     };
-     window.addEventListener('message', handleMessage);
-     return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
   if (!curItem) {
      return (
        <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
           <button onClick={()=>setView('home')} className="flex items-center mx-auto mb-4 text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
-          載入中...
+          載入中或無影片資料...
        </div>
      );
   }
@@ -445,6 +427,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
+  // 加入 enablejsapi=1 以支援遠端控制
   const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1` : '';
 
   const togglePlay = () => {
@@ -460,8 +443,46 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   };
 
-  const next = () => { setIdx(shuffle ? Math.floor(Math.random()*vList.length) : (idx+1)%vList.length); setIsPlaying(false); };
-  const prev = () => { setIdx((idx-1+vList.length)%vList.length); setIsPlaying(false); };
+  // 定義切換上下首邏輯
+  const next = () => { 
+    setIdx(shuffle ? Math.floor(Math.random()*vList.length) : (idx+1)%vList.length); 
+    setIsPlaying(false); 
+  };
+  const prev = () => { 
+    setIdx((idx-1+vList.length)%vList.length); 
+    setIsPlaying(false); 
+  };
+  
+  // 確保 nextRef 永遠是最新的
+  useEffect(() => {
+    nextRef.current = next;
+  }, [next]);
+
+  // 監聽 YouTube 狀態 (2. 狀態同步)
+  useEffect(() => {
+     const handleMessage = (event) => {
+        if (event.data && typeof event.data === 'string') {
+           try {
+             const data = JSON.parse(event.data);
+             if (data.event === 'infoDelivery' && data.info && typeof data.info.playerState === 'number') {
+               const state = data.info.playerState;
+               // 1 = Playing, 3 = Buffering (都算播放中)
+               if (state === 1 || state === 3) setIsPlaying(true);
+               // 2 = Paused, -1 = Unstarted
+               else if (state === 2 || state === -1) setIsPlaying(false);
+               // 0 = Ended -> 觸發下一首 (呼叫 ref 以取得最新 closure)
+               else if (state === 0) {
+                 setIsPlaying(false);
+                 if (nextRef.current) nextRef.current();
+               }
+             }
+           } catch(e){}
+        }
+     };
+     window.addEventListener('message', handleMessage);
+     return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
   
   return (
