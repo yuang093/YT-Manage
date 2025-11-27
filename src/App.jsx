@@ -182,7 +182,8 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading }) => (
   </nav>
 );
 
-const Dashboard = ({ items, viewItem }) => {
+// 修正: 接收 isLoading prop 來正確判斷是否顯示 "讀取中"
+const Dashboard = ({ items, viewItem, isLoading }) => {
   const [filter, setFilter] = useState('all'); 
   const safeItems = items || [];
   const stats = {
@@ -196,6 +197,17 @@ const Dashboard = ({ items, viewItem }) => {
     if (filter === 'all') return true;
     return item.type === filter;
   });
+
+  // 顯示訊息邏輯優化
+  const renderEmptyState = () => {
+    if (isLoading) {
+      return <div className="flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 mr-2 animate-spin"/> 正在讀取雲端資料...</div>;
+    }
+    if (safeItems.length === 0) {
+      return <div>目前尚無資料，請點擊右上角「新增頁面」建立。</div>;
+    }
+    return <div>此分類目前沒有資料。</div>;
+  };
 
   return (
     <div className="space-y-6">
@@ -234,8 +246,8 @@ const Dashboard = ({ items, viewItem }) => {
           <span className="text-xs font-normal text-gray-500 hidden sm:block">點擊標題進入</span>
         </div>
         {filteredItems.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            {items.length === 0 ? '正在讀取雲端資料...' : '此分類目前沒有資料。'}
+          <div className="p-12 text-center text-gray-500">
+            {renderEmptyState()}
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
