@@ -91,6 +91,14 @@ const formatDate = (timestamp) => {
   });
 };
 
+// --- Helper: 統一處理影片物件 (字串相容模式) ---
+// 舊資料可能是純字串網址，新資料是物件 {title, url}
+const getVideoUrl = (item) => typeof item === 'string' ? item : item.url;
+const getVideoTitle = (item) => {
+  if (typeof item === 'string') return item;
+  return item.title && item.title.trim() !== '' ? item.title : item.url;
+};
+
 // --- CSV 處理函數 ---
 const arrayToCSV = (items) => {
   const headers = ['id', 'type', 'title', 'description', 'url', 'urls', 'createdAt', 'visits', 'downloads'];
@@ -254,21 +262,22 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
-  const [playlistUrls, setPlaylistUrls] = useState(['']); 
+  // manualItems 結構: [{title: '', url: ''}]
+  const [manualItems, setManualItems] = useState([{title: '', url: ''}]); 
   const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
 
   const existingSingles = items.filter(i => i.type === 'single');
 
-  const handlePlaylistUrlChange = (index, value) => {
-    const newUrls = [...playlistUrls];
-    newUrls[index] = value;
-    setPlaylistUrls(newUrls);
+  const handleManualItemChange = (index, field, value) => {
+    const newItems = [...manualItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setManualItems(newItems);
   };
 
-  const addPlaylistField = () => setPlaylistUrls([...playlistUrls, '']);
+  const addPlaylistField = () => setManualItems([...manualItems, {title: '', url: ''}]);
   const removePlaylistField = (index) => {
-    const newUrls = playlistUrls.filter((_, i) => i !== index);
-    setPlaylistUrls(newUrls);
+    const newItems = manualItems.filter((_, i) => i !== index);
+    setManualItems(newItems);
   };
 
   const toggleSelection = (itemId) => {
@@ -290,11 +299,26 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
       if (!getYouTubeID(url)) return showNotification('無效的 YouTube 連結', 'error');
       handleCreate({ type, title, description, url });
     } else {
-      const manualValidUrls = playlistUrls.filter(u => getYouTubeID(u));
-      const selectedUrls = existingSingles.filter(item => selectedExistingIds.includes(item.id)).map(item => item.url);
-      const finalUrls = [...manualValidUrls, ...selectedUrls];
-      if (finalUrls.length === 0) return showNotification('請至少輸入或選擇一個有效的 YouTube 連結', 'error');
-      handleCreate({ type, title, description, urls: finalUrls });
+      // 1. 處理手動輸入的
+      const validManualItems = manualItems
+        .filter(item => getYouTubeID(item.url))
+        .map(item => ({ 
+          url: item.url, 
+          title: item.title || item.url 
+        }));
+
+      // 2. 處理從現有庫選擇的
+      const selectedItems = existingSingles
+        .filter(item => selectedExistingIds.includes(item.id))
+        .map(item => ({
+          url: item.url,
+          title: item.title
+        }));
+
+      const finalItems = [...validManualItems, ...selectedItems];
+
+      if (finalItems.length === 0) return showNotification('請至少輸入或選擇一個有效的 YouTube 連結', 'error');
+      handleCreate({ type, title, description, urls: finalItems });
     }
   };
 
@@ -354,9 +378,22 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">或手動輸入其他 YouTube 連結</label>
-              {playlistUrls.map((pUrl, idx) => (
-                <div key={idx} className="flex mb-2">
-                  <input type="url" placeholder={`影片連結 ${idx + 1}`} className="flex-1 rounded-l-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" value={pUrl} onChange={e => handlePlaylistUrlChange(idx, e.target.value)} />
+              {manualItems.map((item, idx) => (
+                <div key={idx} className="flex mb-2 space-x-2">
+                  <input 
+                    type="text" 
+                    placeholder="影片標題 (選填)" 
+                    className="w-1/3 rounded-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" 
+                    value={item.title} 
+                    onChange={e => handleManualItemChange(idx, 'title', e.target.value)} 
+                  />
+                  <input 
+                    type="url" 
+                    placeholder="YouTube 連結 https://..." 
+                    className="flex-1 rounded-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" 
+                    value={item.url} 
+                    onChange={e => handleManualItemChange(idx, 'url', e.target.value)} 
+                  />
                   <button type="button" onClick={() => removePlaylistField(idx)} className="bg-gray-100 px-3 border border-l-0 rounded-r-md hover:bg-gray-200"><X size={16} /></button>
                 </div>
               ))}
@@ -378,21 +415,29 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [url, setUrl] = useState(item.type === 'single' ? item.url : '');
-  const [playlistUrls, setPlaylistUrls] = useState(item.type === 'playlist' ? item.urls : ['']); 
+  
+  // 初始化編輯項目：相容舊資料 (純字串) 與新資料 (物件)
+  const [manualItems, setManualItems] = useState(() => {
+    if (item.type === 'playlist' && Array.isArray(item.urls)) {
+      return item.urls.map(u => typeof u === 'string' ? {title: '', url: u} : u);
+    }
+    return [{title: '', url: ''}];
+  });
+
   const existingSingles = items.filter(i => i.type === 'single');
   const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
 
   useEffect(() => {
-    if (type === 'playlist' && playlistUrls.length === 0) setPlaylistUrls(['']);
+    if (type === 'playlist' && manualItems.length === 0) setManualItems([{title: '', url: ''}]);
   }, []);
 
-  const handlePlaylistUrlChange = (index, value) => {
-    const newUrls = [...playlistUrls];
-    newUrls[index] = value;
-    setPlaylistUrls(newUrls);
+  const handleManualItemChange = (index, field, value) => {
+    const newItems = [...manualItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setManualItems(newItems);
   };
-  const addPlaylistField = () => setPlaylistUrls([...playlistUrls, '']);
-  const removePlaylistField = (index) => setPlaylistUrls(playlistUrls.filter((_, i) => i !== index));
+  const addPlaylistField = () => setManualItems([...manualItems, {title: '', url: ''}]);
+  const removePlaylistField = (index) => setManualItems(manualItems.filter((_, i) => i !== index));
   const toggleSelection = (itemId) => {
     if (selectedExistingIds.includes(itemId)) setSelectedExistingIds(selectedExistingIds.filter(id => id !== itemId));
     else setSelectedExistingIds([...selectedExistingIds, itemId]);
@@ -408,9 +453,9 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
       if (!getYouTubeID(url)) return showNotification('無效的 YouTube 連結', 'error');
       handleUpdate({ ...item, type, title, description, url });
     } else {
-      const manualValidUrls = playlistUrls.filter(u => getYouTubeID(u));
-      const selectedUrls = existingSingles.filter(item => selectedExistingIds.includes(item.id)).map(item => item.url);
-      const finalUrls = [...manualValidUrls, ...selectedUrls];
+      const validManualItems = manualItems.filter(u => getYouTubeID(u.url)).map(i => ({url: i.url, title: i.title || i.url}));
+      const selectedUrls = existingSingles.filter(item => selectedExistingIds.includes(item.id)).map(item => ({url: item.url, title: item.title}));
+      const finalUrls = [...validManualItems, ...selectedUrls];
       if (finalUrls.length === 0) return showNotification('請至少輸入或選擇一個有效的 YouTube 連結', 'error');
       handleUpdate({ ...item, type, title, description, urls: finalUrls });
     }
@@ -462,8 +507,9 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">編輯連結列表</label>
               {playlistUrls.map((pUrl, idx) => (
-                <div key={idx} className="flex mb-2">
-                  <input type="url" placeholder={`影片連結 ${idx + 1}`} className="flex-1 rounded-l-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" value={pUrl} onChange={e => handlePlaylistUrlChange(idx, e.target.value)} />
+                <div key={idx} className="flex mb-2 space-x-2">
+                  <input type="text" placeholder="影片標題 (選填)" className="w-1/3 rounded-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" value={pUrl.title} onChange={e => handleManualItemChange(idx, 'title', e.target.value)} />
+                  <input type="url" placeholder="YouTube 連結" className="flex-1 rounded-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" value={pUrl.url} onChange={e => handleManualItemChange(idx, 'url', e.target.value)} />
                   <button type="button" onClick={() => removePlaylistField(idx)} className="bg-gray-100 px-3 border border-l-0 rounded-r-md hover:bg-gray-200"><X size={16} /></button>
                 </div>
               ))}
@@ -492,7 +538,11 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     setCurrentIndex(0);
   }, [item]);
 
-  const currentVideoId = getYouTubeID(videoList[currentIndex]);
+  const currentItem = videoList[currentIndex];
+  const currentUrl = getVideoUrl(currentItem);
+  const currentTitle = getVideoTitle(currentItem);
+  
+  const currentVideoId = getYouTubeID(currentUrl);
   const embedUrl = currentVideoId ? `https://www.youtube-nocookie.com/embed/${currentVideoId}?autoplay=1` : '';
 
   const handleNext = () => {
@@ -505,7 +555,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   };
   const handlePrev = () => setCurrentIndex((prev) => (prev - 1 + videoList.length) % videoList.length);
   const handleDownloadClick = () => {
-    window.open(videoList[currentIndex], '_blank');
+    window.open(currentUrl, '_blank');
     recordDownload(item.id);
   };
 
@@ -522,7 +572,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8">
             <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-red-500 rounded-full flex items-center justify-center mb-4 animate-pulse"><Music size={40} /></div>
             <h3 className="text-xl font-bold text-center mb-2">正在播放音訊</h3>
-            <p className="text-gray-400 text-sm max-w-md text-center truncate">{item.type === 'playlist' ? `項目 ${currentIndex + 1}: ` : ''} {videoList[currentIndex]}</p>
+            <p className="text-gray-400 text-sm max-w-md text-center truncate">{item.type === 'playlist' ? `項目 ${currentIndex + 1}: ` : ''} {currentTitle}</p>
             <div className="mt-8 text-xs text-gray-500">影片仍在背景執行以維持音訊串流</div>
           </div>
         )}
@@ -554,12 +604,16 @@ const PlayerView = ({ item, setView, recordDownload }) => {
               </div>
             </div>
             <div className="max-h-60 overflow-y-auto border rounded-md">
-              {videoList.map((url, idx) => (
-                <div key={idx} onClick={() => setCurrentIndex(idx)} className={`p-3 text-sm cursor-pointer flex items-center truncate ${idx === currentIndex ? 'bg-red-50 text-red-700 font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
-                    <span className="w-6 text-center mr-2">{idx === currentIndex ? <Play size={12} className="inline"/> : idx + 1}</span>
-                    <span className="truncate flex-1">{url}</span>
-                </div>
-              ))}
+              {videoList.map((vidItem, idx) => {
+                const displayTitle = getVideoTitle(vidItem);
+                const displayUrl = getVideoUrl(vidItem);
+                return (
+                  <div key={idx} onClick={() => setCurrentIndex(idx)} className={`p-3 text-sm cursor-pointer flex items-center truncate ${idx === currentIndex ? 'bg-red-50 text-red-700 font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
+                      <span className="w-6 text-center mr-2">{idx === currentIndex ? <Play size={12} className="inline"/> : idx + 1}</span>
+                      <span className="truncate flex-1" title={displayUrl}>{displayTitle}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
