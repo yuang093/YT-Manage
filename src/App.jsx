@@ -459,34 +459,22 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [permErr, setPermErr] = useState(false);
 
-  useEffect(() => {
-    const initAuth = async () => { try { await signInAnonymously(auth); } catch(e) { console.error(e); } };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      setIsLoading(true); setPermErr(false);
-      return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items'), (snap) => {
-        const d = snap.docs.map(doc => doc.data()).sort((a,b)=>b.createdAt-a.createdAt);
-        setItems(d); setIsLoading(false);
-      }, (err) => { setIsLoading(false); if(err.code==='permission-denied') { setPermErr(true); showNotification('權限不足', 'error'); } });
-    }
-  }, [user]);
-
+  // Define all handlers BEFORE useEffect and return
   const showNotification = (msg, type='success') => { setNotification({msg, type}); setTimeout(()=>setNotification(null), 3000); };
 
   const handleCreate = async (item) => {
     const newItem = { ...item, id: generateId(), createdAt: Date.now(), visits: 0, downloads: 0 };
     try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', newItem.id), newItem); showNotification('建立成功'); setView('home'); } catch(e) { showNotification('建立失敗: '+e.message, 'error'); }
   };
+  
   const handleUpdate = async (item) => {
     try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), item, {merge:true}); showNotification('更新成功'); setEditItem(null); setView('admin'); } catch(e) { showNotification('更新失敗', 'error'); }
   };
+  
   const handleDelete = async (id) => {
     if(window.confirm('確認刪除?')) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id)); showNotification('已刪除'); } catch(e) { showNotification('刪除失敗', 'error'); } }
   };
+  
   const handleImport = (e) => {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
@@ -505,22 +493,62 @@ export default function App() {
     };
     reader.readAsText(file);
   };
+  
   const handleExport = () => {
     const url = URL.createObjectURL(new Blob(['\uFEFF'+arrayToCSV(items)], {type:'text/csv;charset=utf-8;'}));
     const link = document.createElement('a'); link.href = url; link.download = 'backup.csv'; link.click();
   };
+  
   const viewItem = async (item) => {
     setActiveItem(item); setView('view');
     try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), {visits: (item.visits||0)+1}); } catch(e){}
   };
+  
   const recordDownload = async (id) => {
     const item = items.find(i=>i.id===id);
     if(item) try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id), {downloads: (item.downloads||0)+1}); } catch(e){}
   };
 
+  const handleLogin = (p) => { 
+    if (p === '1qaz2wsx') { 
+      setIsAdmin(true); 
+      setView('admin'); 
+      showNotification('管理員登入成功'); 
+    } else {
+      showNotification('密碼錯誤', 'error'); 
+    }
+  };
+  
+  const handleLogout = () => { 
+    setIsAdmin(false); 
+    setView('home'); 
+    showNotification('已登出'); 
+  };
+  
+  const openEdit = (item) => { 
+    setEditItem(item); 
+    setView('edit'); 
+  };
+
+  useEffect(() => {
+    const initAuth = async () => { try { await signInAnonymously(auth); } catch(e) { console.error(e); } };
+    initAuth();
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      setIsLoading(true); setPermErr(false);
+      return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items'), (snap) => {
+        const d = snap.docs.map(doc => doc.data()).sort((a,b)=>b.createdAt-a.createdAt);
+        setItems(d); setIsLoading(false);
+      }, (err) => { setIsLoading(false); if(err.code==='permission-denied') { setPermErr(true); showNotification('權限不足', 'error'); } });
+    }
+  }, [user]);
+
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900">
-      <Header setView={setView} isAdmin={isAdmin} handleLogout={()=>setIsAdmin(false)} isLoading={isLoading}/>
+      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading}/>
       {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow text-white z-50 ${notification.type==='error'?'bg-red-500':'bg-green-500'}`}>{notification.msg}</div>}
       <main className="max-w-7xl mx-auto py-6 px-4">
         {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr}/>}
@@ -528,7 +556,7 @@ export default function App() {
         {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification}/>}
         {view === 'view' && activeItem && <PlayerView item={activeItem} setView={setView} recordDownload={recordDownload}/>}
         {view === 'login' && <LoginView onLogin={handleLogin} setView={setView}/>}
-        {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={(i)=>{setEditItem(i);setView('edit')}} handleImport={handleImport} handleExport={handleExport}/>}
+        {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={openEdit} handleImport={handleImport} handleExport={handleExport}/>}
       </main>
       <div className="fixed bottom-4 left-4 z-50 px-3 py-1 bg-white shadow rounded-full text-xs flex items-center text-gray-600"><Cloud size={12} className="mr-1 text-blue-500"/> 雲端模式 (Firebase)</div>
     </div>
