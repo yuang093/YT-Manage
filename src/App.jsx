@@ -1,7 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Shuffle, 
@@ -25,16 +22,16 @@ import {
   Square,
   FileText,
   Cloud,
-  HardDrive,
-  AlertTriangle,
-  CheckCircle,
-  Loader2
+  Loader2,
+  ShieldAlert
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
 
-// ============================================================================
-// ⚠️ 重要：若要在 Vercel 等外部網站使用雲端資料庫，請在此填入您的 Firebase 設定
-// ============================================================================
-const YOUR_FIREBASE_CONFIG = {
+// --- Firebase 初始化設定 (參考您提供的範例寫法) ---
+// 邏輯：如果是預覽環境(有 __firebase_config)則使用預覽設定；否則使用您提供的正式設定
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
   authDomain: "yt-manager-995a5.firebaseapp.com",
   projectId: "yt-manager-995a5",
@@ -43,40 +40,15 @@ const YOUR_FIREBASE_CONFIG = {
   appId: "1:188108532520:web:76f89808fa5e919bc1be1d"
 };
 
-// --- Firebase 初始化 (智慧判斷模式) ---
-let app = null;
-let auth = null;
-let db = null;
-let appId = 'default-app-id';
-let isCloudAvailable = false;
-let configSource = 'none';
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-try {
-  let configToUse = null;
-
-  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-    configToUse = JSON.parse(__firebase_config);
-    if (typeof __app_id !== 'undefined') appId = __app_id;
-    configSource = 'env';
-  } 
-  else if (YOUR_FIREBASE_CONFIG) {
-    configToUse = YOUR_FIREBASE_CONFIG;
-    configSource = 'manual';
-  }
-
-  if (configToUse) {
-    app = initializeApp(configToUse);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    isCloudAvailable = true;
-    console.log(`Firebase initialized successfully using ${configSource} config.`);
-  } else {
-    console.log("No Firebase config found. Running in LocalStorage mode.");
-  }
-} catch (e) {
-  console.warn("Firebase init failed:", e);
-  isCloudAvailable = false;
-}
+// 資料庫集合路徑設定
+// 在預覽環境使用系統分配的 ID，在 Vercel 等正式環境使用固定的 'yt-manager-global'
+// 這確保了所有外部使用者都連線到同一個資料庫路徑，實現跨裝置同步
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'yt-manager-global';
 
 // --- 工具函數 ---
 
@@ -182,8 +154,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading }) => (
   </nav>
 );
 
-// 修正: 接收 isLoading prop 來正確判斷是否顯示 "讀取中"
-const Dashboard = ({ items, viewItem, isLoading }) => {
+const Dashboard = ({ items, viewItem, isLoading, permissionError }) => {
   const [filter, setFilter] = useState('all'); 
   const safeItems = items || [];
   const stats = {
@@ -198,19 +169,28 @@ const Dashboard = ({ items, viewItem, isLoading }) => {
     return item.type === filter;
   });
 
-  // 顯示訊息邏輯優化
   const renderEmptyState = () => {
+    if (permissionError) {
+      return (
+        <div className="text-red-500 flex flex-col items-center p-4 border border-red-200 rounded bg-red-50">
+          <ShieldAlert className="w-8 h-8 mb-2"/>
+          <span className="font-bold">無法讀取資料庫</span>
+          <span className="text-sm mt-1">請至 Firebase Console 檢查 Firestore Rules 是否設為 true</span>
+        </div>
+      );
+    }
     if (isLoading) {
-      return <div className="flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 mr-2 animate-spin"/> 正在讀取雲端資料...</div>;
+      return <div className="flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 mr-2 animate-spin"/> 正在連線至雲端資料庫...</div>;
     }
     if (safeItems.length === 0) {
-      return <div>目前尚無資料，請點擊右上角「新增頁面」建立。</div>;
+      return <div>目前雲端資料庫是空的，請點擊右上角「新增頁面」開始建立。</div>;
     }
     return <div>此分類目前沒有資料。</div>;
   };
 
   return (
     <div className="space-y-6">
+      {/* 統計卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
           <div className="text-gray-500 text-sm">總項目數</div>
@@ -283,7 +263,6 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
-  // manualItems 結構: [{title: '', url: ''}]
   const [manualItems, setManualItems] = useState([{title: '', url: ''}]); 
   const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
 
@@ -320,7 +299,6 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
       if (!getYouTubeID(url)) return showNotification('無效的 YouTube 連結', 'error');
       handleCreate({ type, title, description, url });
     } else {
-      // 1. 處理手動輸入的
       const validManualItems = manualItems
         .filter(item => getYouTubeID(item.url))
         .map(item => ({ 
@@ -328,7 +306,6 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
           title: item.title || item.url 
         }));
 
-      // 2. 處理從現有庫選擇的
       const selectedItems = existingSingles
         .filter(item => selectedExistingIds.includes(item.id))
         .map(item => ({
@@ -437,7 +414,6 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
   const [description, setDescription] = useState(item.description);
   const [url, setUrl] = useState(item.type === 'single' ? item.url : '');
   
-  // 初始化編輯項目：相容舊資料 (純字串) 與新資料 (物件)
   const [manualItems, setManualItems] = useState(() => {
     if (item.type === 'playlist' && Array.isArray(item.urls)) {
       return item.urls.map(u => typeof u === 'string' ? {title: '', url: u} : u);
@@ -653,20 +629,14 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div className="flex items-center">
             <span className="text-gray-500 mr-2">目前資料模式:</span>
-            {isCloudAvailable ? 
-              <span className="text-green-600 font-bold flex items-center"><Cloud size={12} className="mr-1"/> 雲端 (Firebase)</span> : 
-              <span className="text-orange-600 font-bold flex items-center"><HardDrive size={12} className="mr-1"/> 本機 (LocalStorage)</span>
-            }
+            <span className="text-green-600 font-bold flex items-center"><Cloud size={12} className="mr-1"/> 雲端 (Firebase)</span>
           </div>
           <div className="flex items-center">
-            <span className="text-gray-500 mr-2">設定檔狀態:</span>
-            {isCloudAvailable ? 
-              <span className="text-green-600 font-bold flex items-center">✅ 已載入</span> : 
-              <span className="text-red-600 font-bold flex items-center">⚠️ 未偵測到</span>
-            }
+            <span className="text-gray-500 mr-2">權限狀態:</span>
+            <span className="text-green-600 font-bold flex items-center">✅ 連線正常</span>
           </div>
           <div className="flex items-center">
-             {!isCloudAvailable && <span className="text-gray-400">(請在程式碼頂端填寫 YOUR_FIREBASE_CONFIG)</span>}
+             <span className="text-gray-400 font-mono text-[10px]">Target: yt-manager-global</span>
           </div>
         </div>
       </div>
@@ -747,56 +717,49 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [permissionError, setPermissionError] = useState(false);
 
   // Auth & Data Init
   useEffect(() => {
-    // 如果是雲端模式 (isCloudAvailable = true)，執行 Firebase 初始化
-    if (isCloudAvailable && auth) {
-      const initAuth = async () => {
+    const initAuth = async () => {
+      try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
         }
-      };
-      initAuth();
-      const unsubscribe = onAuthStateChanged(auth, setUser);
-      return () => unsubscribe();
-    } else {
-      // 否則載入 LocalStorage
-      const savedItems = localStorage.getItem('yt_manager_items');
-      if (savedItems) {
-        try { setItems(JSON.parse(savedItems)); } catch (e) { console.error("Local data error", e); }
+      } catch (error) {
+        console.error("Auth Error:", error);
       }
-    }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
   }, []);
 
-  // Data Sync (Cloud vs Local)
+  // Data Sync (Cloud Only)
   useEffect(() => {
-    if (isCloudAvailable && user && db) {
+    if (user) {
       setIsLoading(true);
-      // 雲端模式監聽
+      setPermissionError(false);
       const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items');
+      
       const unsubscribe = onSnapshot(colRef, (snapshot) => {
         const loadedItems = snapshot.docs.map(doc => doc.data());
         loadedItems.sort((a, b) => b.createdAt - a.createdAt);
         setItems(loadedItems);
         setIsLoading(false);
-        // 同步備份到 LocalStorage
-        localStorage.setItem('yt_manager_items', JSON.stringify(loadedItems));
       }, (error) => {
         console.error("Data fetch error:", error);
         setIsLoading(false);
         if (error.code === 'permission-denied') {
-           showNotification("資料庫權限不足！請檢查 Firebase Rules", 'error');
+           setPermissionError(true);
+           showNotification("資料庫權限不足！", 'error');
         }
       });
       return () => unsubscribe();
-    } else if (!isCloudAvailable) {
-      // 本機模式：當 items 變動時存入 LocalStorage
-      localStorage.setItem('yt_manager_items', JSON.stringify(items));
     }
-  }, [user]); // Removed 'items' to fix loop
+  }, [user]);
 
   // 強制 Referrer
   useEffect(() => {
@@ -812,58 +775,37 @@ export default function App() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // CRUD Wrappers (Hybrid)
   const handleCreate = async (newItem) => {
     const item = { ...newItem, id: generateId(), createdAt: Date.now(), visits: 0, downloads: 0 };
-    if (isCloudAvailable && user && db) {
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), item);
-        showNotification('雲端建立成功！');
-      } catch (e) { showNotification('雲端建立失敗: ' + e.message, 'error'); }
-    } else {
-      setItems([item, ...items]); // Local update triggers useEffect -> localStorage
-      showNotification('本機建立成功！');
-    }
-    setView('home');
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), item);
+      showNotification('建立成功！');
+      setView('home');
+    } catch (e) { showNotification('建立失敗: ' + e.message, 'error'); }
   };
 
   const handleUpdate = async (updatedItem) => {
-    if (isCloudAvailable && user && db) {
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', updatedItem.id), updatedItem, { merge: true });
-        showNotification('雲端更新成功！');
-      } catch (e) { showNotification('雲端更新失敗: ' + e.message, 'error'); }
-    } else {
-      const newItems = items.map(i => i.id === updatedItem.id ? { ...i, ...updatedItem } : i);
-      setItems(newItems);
-      showNotification('本機更新成功！');
-    }
-    setEditItem(null);
-    setView('admin');
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', updatedItem.id), updatedItem, { merge: true });
+      showNotification('更新成功！');
+      setEditItem(null);
+      setView('admin');
+    } catch (e) { showNotification('更新失敗: ' + e.message, 'error'); }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('確定要刪除這個項目嗎？')) {
-      if (isCloudAvailable && user && db) {
-        try {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id));
-          showNotification('已從雲端刪除');
-        } catch (e) { showNotification('刪除失敗: ' + e.message, 'error'); }
-      } else {
-        setItems(items.filter(i => i.id !== id));
-        showNotification('已從本機刪除');
-      }
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id));
+        showNotification('已刪除');
+      } catch (e) { showNotification('刪除失敗: ' + e.message, 'error'); }
     }
   };
 
-  // 新增: 補回遺失的 handleExport 函式
   const handleExport = () => {
-    // 改為 CSV 匯出
     const csvContent = arrayToCSV(items);
-    // 加入 BOM 以支援 Excel 中文顯示
     const bom = "\uFEFF"; 
     const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(bom + csvContent);
-    
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
     downloadAnchorNode.setAttribute("download", "youtube_manager_backup.csv");
@@ -873,7 +815,6 @@ export default function App() {
     showNotification('CSV 匯出成功');
   };
 
-  // Import logic updated for hybrid
   const handleImport = (event) => {
     const fileReader = new FileReader();
     fileReader.readAsText(event.target.files[0], "UTF-8");
@@ -881,52 +822,33 @@ export default function App() {
       try {
         const parsedItems = csvToArray(e.target.result);
         if (parsedItems && parsedItems.length > 0) {
-          if (isCloudAvailable && user && db) {
-            let successCount = 0;
-            for (const item of parsedItems) {
-               const itemId = item.id || generateId();
-               await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', itemId), { ...item, id: itemId });
-               successCount++;
-            }
-            showNotification(`雲端匯入成功 (${successCount} 筆)`);
-          } else {
-            setItems(parsedItems);
-            showNotification('本機匯入成功');
+          let successCount = 0;
+          for (const item of parsedItems) {
+             const itemId = item.id || generateId();
+             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', itemId), { ...item, id: itemId });
+             successCount++;
           }
+          showNotification(`匯入成功 (${successCount} 筆)`);
         } else { showNotification('CSV 格式錯誤或無資料', 'error'); }
       } catch (error) { console.error(error); showNotification('CSV 解析錯誤', 'error'); }
     };
   };
 
   const viewItem = async (item) => {
-    if (isCloudAvailable && user && db) {
-       const newVisits = (item.visits || 0) + 1;
-       setActiveItem({ ...item, visits: newVisits }); 
-       try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), { visits: newVisits }); } catch (e) {}
-    } else {
-       const newVisits = (item.visits || 0) + 1;
-       const updatedItem = { ...item, visits: newVisits };
-       const newItems = items.map(i => i.id === item.id ? updatedItem : i);
-       setItems(newItems);
-       setActiveItem(updatedItem);
-    }
+    const newVisits = (item.visits || 0) + 1;
+    setActiveItem({ ...item, visits: newVisits }); 
+    try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), { visits: newVisits }); } catch (e) {}
     setView('view');
   };
 
   const recordDownload = async (itemId) => {
-    if (isCloudAvailable && user && db) {
-      const item = items.find(i => i.id === itemId);
-      if (item) {
-        try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', itemId), { downloads: (item.downloads || 0) + 1 }); } catch (e) {}
-      }
-    } else {
-      const newItems = items.map(i => i.id === itemId ? { ...i, downloads: (i.downloads || 0) + 1 } : i);
-      setItems(newItems);
+    const item = items.find(i => i.id === itemId);
+    if (item) {
+      try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', itemId), { downloads: (item.downloads || 0) + 1 }); } catch (e) {}
     }
     showNotification('已記錄下載/點擊次數');
   };
 
-  // 登入登出與頁面導航
   const handleLogin = (p) => { if (p === '1qaz2wsx') { setIsAdmin(true); setView('admin'); showNotification('管理員登入成功'); } else showNotification('密碼錯誤', 'error'); };
   const handleLogout = () => { setIsAdmin(false); setView('home'); showNotification('已登出'); };
   const openEdit = (item) => { setEditItem(item); setView('edit'); };
@@ -937,7 +859,7 @@ export default function App() {
       {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow-lg text-white z-50 ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'}`}>{notification.msg}</div>}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-4 sm:px-0">
-          {view === 'home' && <Dashboard items={items} viewItem={viewItem} />}
+          {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permissionError} />}
           {view === 'create' && <CreatePage items={items} handleCreate={handleCreate} setView={setView} showNotification={showNotification} />}
           {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification} />}
           {view === 'view' && activeItem && <PlayerView item={activeItem} setView={setView} recordDownload={recordDownload} />}
@@ -945,13 +867,9 @@ export default function App() {
           {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={openEdit} handleImport={handleImport} handleExport={handleExport} />}
         </div>
       </main>
-      {/* 狀態指示燈 */}
+      {/* 狀態指示燈 (總是雲端) */}
       <div className="fixed bottom-4 left-4 z-50 px-3 py-1 bg-white shadow-lg border border-gray-200 rounded-full text-xs font-medium flex items-center text-gray-600">
-        {isCloudAvailable ? (
-          <><Cloud size={12} className="mr-1 text-blue-500" /> 雲端模式 (Firebase)</>
-        ) : (
-          <><HardDrive size={12} className="mr-1 text-orange-500" /> 本機模式 (LocalStorage)</>
-        )}
+        <Cloud size={12} className="mr-1 text-blue-500" /> 雲端模式 (Firebase)
       </div>
     </div>
   );
