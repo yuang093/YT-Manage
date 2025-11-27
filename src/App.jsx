@@ -25,7 +25,9 @@ import {
   ShieldAlert,
   Loader2,
   CheckCircle,
-  Pause // 新增 Pause 圖示
+  Pause,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
@@ -401,27 +403,27 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
 
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
-  const [shuffle, setShuffle] = useState(false);
+  const [shuffle, setShuffle] = useState(true); // 5. 預設開啟隨機播放
   const [vList, setVList] = useState([]);
   const [audio, setAudio] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false); // 用來控制按鈕顯示
-  const iframeRef = useRef(null); // 用來控制 Iframe
+  const [isPlaying, setIsPlaying] = useState(false); 
+  const iframeRef = useRef(null); 
 
   useEffect(() => { if (item.type === 'single') setVList([item.url]); else setVList(item.urls); setIdx(0); setIsPlaying(false); }, [item]);
   
   const curItem = vList[idx];
   
-  // 監聽 YouTube 狀態
+  // 監聽 YouTube 狀態 (2. 狀態同步)
   useEffect(() => {
      const handleMessage = (event) => {
-        // 簡單的訊息過濾，確認來自 YouTube
         if (event.data && typeof event.data === 'string') {
            try {
              const data = JSON.parse(event.data);
              if (data.event === 'infoDelivery' && data.info && typeof data.info.playerState === 'number') {
                const state = data.info.playerState;
-               // 1 = Playing, 2 = Paused, 0 = Ended, -1 = Unstarted, 3 = Buffering
+               // 1 = Playing, 3 = Buffering (都算播放中)
                if (state === 1 || state === 3) setIsPlaying(true);
+               // 2 = Paused, 0 = Ended, -1 = Unstarted
                else if (state === 2 || state === 0 || state === -1) setIsPlaying(false);
              }
            } catch(e){}
@@ -435,7 +437,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
      return (
        <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
           <button onClick={()=>setView('home')} className="flex items-center mx-auto mb-4 text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
-          載入中或無影片資料...
+          載入中...
        </div>
      );
   }
@@ -443,7 +445,6 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
   const vid = getYouTubeID(curUrl);
-  // 加入 enablejsapi=1 以支援遠端控制
   const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1` : '';
 
   const togglePlay = () => {
@@ -454,7 +455,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         func: cmd,
         args: []
       }), '*');
-      // 樂觀更新狀態，讓 UI 反應更快
+      // 樂觀更新 (立即反應，不用等監聽事件)
       setIsPlaying(!isPlaying);
     }
   };
@@ -465,33 +466,26 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex justify-between mb-4"><button onClick={()=>setView('home')} className="flex items-center text-gray-500"><SkipBack size={16} className="mr-1"/> 返回</button><button onClick={()=>setAudio(!audio)} className={`flex items-center px-3 py-1 rounded-full text-sm ${audio?'bg-purple-600 text-white':'bg-gray-200'}`}><Music size={16} className="mr-1"/> {audio?'純音樂 ON':'切換純音樂'}</button></div>
-      <div className="relative rounded-xl overflow-hidden shadow-2xl bg-black aspect-video">
-        
-        {/* 中央播放控制按鈕 - 點擊時發送指令 */}
-        <div 
-           className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 hover:bg-black/20 transition-colors cursor-pointer"
-           onClick={togglePlay}
-        >
-            <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:scale-110 transition-transform border border-white/50">
-               {isPlaying ? (
-                 <Pause size={40} className="text-white fill-white" />
-               ) : (
-                 <Play size={40} className="text-white fill-white ml-1" />
-               )}
-            </div>
-        </div>
+      <div className="flex justify-between mb-4">
+          <button onClick={()=>setView('home')} className="flex items-center text-gray-500"><SkipBack size={16} className="mr-1"/> 返回</button>
+          <button onClick={()=>setAudio(!audio)} className={`flex items-center px-3 py-1 rounded-full text-sm ${audio?'bg-purple-600 text-white':'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+            <Music size={16} className="mr-1" /> {audio?'純音樂模式 ON':'切換純音樂'}
+          </button>
+      </div>
 
-        {/* Audio Mode Overlay - pointer-events-none 讓點擊穿透到上方的控制層 */}
+      {/* 播放器區域 (3. 純音樂模式自動縮小) */}
+      <div className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-300 ${audio ? 'h-64' : 'aspect-video'}`}>
+        
+        {/* Audio Mode Overlay (視覺遮罩) - pointer-events-none 讓點擊穿透 */}
         {audio && (
           <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8 pointer-events-none">
              <Music size={40} className={`mb-4 ${isPlaying ? 'animate-pulse text-green-400' : 'text-gray-500'}`}/>
-             <h3 className="text-xl font-bold">{isPlaying ? '正在播放' : '已暫停'}</h3>
+             <h3 className="text-xl font-bold">{isPlaying ? '正在播放' : '已暫停 (點擊播放)'}</h3>
              <p className="text-gray-400 text-sm mt-2 text-center line-clamp-2">{curTitle}</p>
           </div>
         )}
         
-        {/* Iframe - 永遠保持滿版，只是 Audio 模式下透明度為 0 */}
+        {/* Iframe (隱藏但存在) */}
         <iframe 
           ref={iframeRef}
           className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`} 
@@ -503,15 +497,48 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         ></iframe>
       </div>
 
+      {/* 1. 控制列 (移至下方，不遮擋畫面) */}
+      <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between border-t-4 border-red-600">
+         <div className="flex items-center space-x-4">
+            <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg">
+              {isPlaying ? <Pause size={24} fill="currentColor"/> : <Play size={24} fill="currentColor" className="ml-1"/>}
+            </button>
+            <div>
+              <div className="text-xs text-gray-500 font-bold uppercase">Now Playing</div>
+              <div className="font-medium text-gray-900 truncate max-w-[150px] sm:max-w-md">{curTitle}</div>
+            </div>
+         </div>
+         
+         {item.type === 'playlist' && (
+           <div className="flex items-center space-x-2">
+             <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full ${shuffle?'bg-indigo-100 text-indigo-600':'text-gray-400 hover:bg-gray-100'}`}><Shuffle size={20}/></button>
+             <button onClick={prev} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipBack size={20}/></button>
+             <button onClick={next} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipForward size={20}/></button>
+           </div>
+         )}
+      </div>
+
+      {/* 詳細資訊與清單 */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between"><div><h1 className="text-2xl font-bold">{item.title}</h1><p className="text-gray-600">{item.description}</p></div><button onClick={openLink} className="px-4 py-2 bg-blue-600 text-white rounded flex items-center"><ExternalLink size={18} className="mr-2"/> 下載</button></div>
+        <div className="flex justify-between items-start">
+          <div><h1 className="text-2xl font-bold mb-2">{item.title}</h1><p className="text-gray-600 whitespace-pre-wrap">{item.description}</p></div>
+          <button onClick={openLink} className="flex-shrink-0 ml-4 px-4 py-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center"><ExternalLink size={18} className="mr-2"/> 原始連結</button>
+        </div>
+        
         {item.type === 'playlist' && (
           <div className="mt-6 border-t pt-4">
-            <div className="flex justify-between mb-4"><h3 className="font-bold flex"><List size={18} className="mr-2"/> 播放清單</h3><div className="flex gap-2"><button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded ${shuffle?'bg-indigo-100 text-indigo-600':'text-gray-400'}`}><Shuffle size={20}/></button><button onClick={prev}><SkipBack size={20}/></button><button onClick={next}><SkipForward size={20}/></button></div></div>
-            <div className="max-h-60 overflow-y-auto border rounded">{vList.map((v, i) => (<div key={i} onClick={()=>setIdx(i)} className={`p-3 cursor-pointer flex items-center ${i===idx?'bg-red-50 text-red-700':''}`}><span className="w-6 mr-2">{i===idx?<Play size={12}/>:i+1}</span><span className="truncate">{getVideoTitle(v)}</span></div>))}</div>
+            <h3 className="font-bold flex mb-4 text-gray-700"><List size={18} className="mr-2"/> 播放清單 ({vList.length})</h3>
+            <div className="max-h-60 overflow-y-auto border rounded-md">
+              {vList.map((v, i) => (
+                <div key={i} onClick={()=>setIdx(i)} className={`p-3 cursor-pointer flex items-center border-b last:border-0 ${i===idx?'bg-red-50 text-red-700 font-medium':'hover:bg-gray-50 text-gray-600'}`}>
+                    <span className="w-8 text-center mr-2 text-xs text-gray-400">{i===idx?<Play size={12} className="mx-auto text-red-600"/>:i+1}</span>
+                    <span className="truncate flex-1">{getVideoTitle(v)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        <div className="mt-4 text-xs text-gray-400 flex space-x-4"><span>累積訪問: {item.visits || 0}</span><span>累積下載/點擊: {item.downloads || 0}</span></div>
+        <div className="mt-4 text-xs text-gray-400 flex space-x-4"><span>累積訪問: {item.visits || 0}</span><span>累積下載: {item.downloads || 0}</span></div>
       </div>
     </div>
   );
