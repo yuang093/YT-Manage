@@ -25,20 +25,21 @@ import {
   Square,
   FileText,
   Cloud,
-  HardDrive
+  HardDrive,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 
 // ============================================================================
 // ⚠️ 重要：若要在 Vercel 等外部網站使用雲端資料庫，請在此填入您的 Firebase 設定
 // ============================================================================
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCplYulnlwhbZPWAYCGnP1DNfXNcjmArzs",
-  authDomain: "yt-manoger.firebaseapp.com",
-  projectId: "yt-manoger",
-  storageBucket: "yt-manoger.firebasestorage.app",
-  messagingSenderId: "677759384660",
-  appId: "1:677759384660:web:9b4fe1f618fb463dd441c1"
+const YOUR_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
+  authDomain: "yt-manager-995a5.firebaseapp.com",
+  projectId: "yt-manager-995a5",
+  storageBucket: "yt-manager-995a5.firebasestorage.app",
+  messagingSenderId: "188108532520",
+  appId: "1:188108532520:web:76f89808fa5e919bc1be1d"
 };
 
 // --- Firebase 初始化 (智慧判斷模式) ---
@@ -364,7 +365,7 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
           <div className="space-y-6">
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
               <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium text-gray-700">從現有單曲庫選擇</label>
+                <label className="block text-sm font-medium text-gray-700">從現有單曲庫選擇 (自動帶入標題)</label>
                 {existingSingles.length > 0 && (
                   <button type="button" onClick={handleSelectAll} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
                     {selectedExistingIds.length === existingSingles.length ? '取消全選' : `全選 (${existingSingles.length})`}
