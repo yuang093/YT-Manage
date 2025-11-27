@@ -26,8 +26,7 @@ import {
   Loader2,
   CheckCircle,
   Pause,
-  Maximize2,
-  Minimize2
+  Repeat
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
@@ -55,13 +54,11 @@ let configSource = 'none';
 
 try {
   let configToUse = null;
-  // 1. 強制優先使用手動設定
   if (YOUR_FIREBASE_CONFIG) {
     configToUse = YOUR_FIREBASE_CONFIG;
     configSource = 'manual';
     appId = 'yt-manager-global'; 
   }
-  // 2. 環境變數
   else if (typeof __firebase_config !== 'undefined' && __firebase_config) {
     configToUse = JSON.parse(__firebase_config);
     if (typeof __app_id !== 'undefined') appId = __app_id;
@@ -91,8 +88,14 @@ const getYouTubeID = (url) => {
 const formatDate = (timestamp) => new Date(timestamp).toLocaleString('zh-TW', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
 });
+const formatDuration = (seconds) => {
+  if (!seconds || isNaN(seconds)) return "00:00";
+  const min = Math.floor(seconds / 60);
+  const sec = Math.floor(seconds % 60);
+  return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
+};
 
-// 安全獲取 URL 與 Title，防止 undefined 錯誤
+// 安全獲取 URL 與 Title
 const getVideoUrl = (item) => {
   if (!item) return '';
   return typeof item === 'string' ? item : item.url;
@@ -401,164 +404,197 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
   );
 };
 
+// --- 重要修改: PlayerView ---
+// 1. 引入 YouTube IFrame API 以解決自動播放與進度條問題
+// 2. 新增 currentTime 與 duration 狀態
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
   const [shuffle, setShuffle] = useState(true); 
   const [vList, setVList] = useState([]);
   const [audio, setAudio] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false); 
-  const iframeRef = useRef(null); 
-  const nextRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isApiReady, setIsApiReady] = useState(false);
+  
+  const playerRef = useRef(null);
+  const containerRef = useRef(null);
+  const progressInterval = useRef(null);
 
+  // 初始化播放清單
   useEffect(() => { 
     if (item.type === 'single') setVList([item.url]); 
     else setVList(item.urls); 
     setIdx(0); 
-    setIsPlaying(false); 
+    setIsPlaying(false);
   }, [item]);
   
   const curItem = vList[idx];
-  
   const curUrl = getVideoUrl(curItem);
   const curTitle = getVideoTitle(curItem);
-  const vid = getYouTubeID(curUrl);
-  // 修正: 確保 origin 準確以接收 postMessage
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const embed = vid ? `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&playsinline=1&enablejsapi=1&origin=${origin}&widgetid=1` : '';
+  const videoId = getYouTubeID(curUrl);
+
+  // 載入 YouTube API
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      window.onYouTubeIframeAPIReady = () => setIsApiReady(true);
+      document.body.appendChild(tag);
+    } else {
+      setIsApiReady(true);
+    }
+  }, []);
+
+  // 初始化播放器
+  useEffect(() => {
+    if (isApiReady && videoId && containerRef.current) {
+      // 如果已有播放器，先銷毀
+      if (playerRef.current) {
+        playerRef.current.destroy();
+      }
+
+      const onStateChange = (event) => {
+        if (event.data === window.YT.PlayerState.PLAYING) {
+          setIsPlaying(true);
+          setDuration(playerRef.current.getDuration());
+          // 開始計時
+          if(progressInterval.current) clearInterval(progressInterval.current);
+          progressInterval.current = setInterval(() => {
+             setCurrentTime(playerRef.current.getCurrentTime());
+          }, 1000);
+        } else {
+          if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
+          if (event.data === window.YT.PlayerState.ENDED) {
+             setIsPlaying(false);
+             handleNext(); // 自動播放下一首
+          }
+          clearInterval(progressInterval.current);
+        }
+      };
+
+      playerRef.current = new window.YT.Player('yt-player', {
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          'autoplay': 1,
+          'controls': 0, // 隱藏原生控制項，使用自訂的
+          'playsinline': 1, // 手機版重要設定
+          'disablekb': 1,
+          'fs': 0,
+          'rel': 0
+        },
+        events: {
+          'onStateChange': onStateChange,
+          'onReady': (e) => {
+             setDuration(e.target.getDuration());
+             e.target.playVideo(); // 嘗試自動播放
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
+  }, [isApiReady, videoId]); // 當 videoId 改變時重新載入
 
   const togglePlay = () => {
-    const cmd = isPlaying ? 'pauseVideo' : 'playVideo';
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(JSON.stringify({
-        event: 'command',
-        func: cmd,
-        args: []
-      }), '*');
-      // 樂觀更新UI
-      setIsPlaying(!isPlaying);
+    if (!playerRef.current || typeof playerRef.current.getPlayerState !== 'function') return;
+    const state = playerRef.current.getPlayerState();
+    if (state === window.YT.PlayerState.PLAYING) {
+      playerRef.current.pauseVideo();
+    } else {
+      playerRef.current.playVideo();
     }
   };
 
-  const next = () => { 
-    setIdx(shuffle ? Math.floor(Math.random()*vList.length) : (idx+1)%vList.length); 
-    setIsPlaying(false); 
+  const handleSeek = (e) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (playerRef.current) {
+      playerRef.current.seekTo(newTime, true);
+    }
   };
-  const prev = () => { 
-    setIdx((idx-1+vList.length)%vList.length); 
-    setIsPlaying(false); 
+
+  const handleNext = () => {
+    setIdx(prevIdx => shuffle ? Math.floor(Math.random() * vList.length) : (prevIdx + 1) % vList.length);
   };
+
+  const handlePrev = () => {
+    setIdx(prevIdx => (prevIdx - 1 + vList.length) % vList.length);
+  };
+
   const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
   
-  useEffect(() => {
-    nextRef.current = next;
-  }, [next]);
+  if (!curItem) return <div className="p-12 text-center text-gray-500">載入中...</div>;
 
-  // 強化版 YouTube 監聽器
-  useEffect(() => {
-     const handleMessage = (event) => {
-        // 寬鬆檢查來源，確保來自 YouTube
-        if (!event.origin.match(/youtube(-nocookie)?\.com$/)) return;
-
-        if (event.data && typeof event.data === 'string') {
-           try {
-             const data = JSON.parse(event.data);
-             
-             // 偵測兩種常見的 YouTube 狀態事件格式
-             const isStateChange = data.event === 'onStateChange' || data.event === 'infoDelivery';
-             
-             if (isStateChange && data.info && typeof data.info.playerState === 'number') {
-               const state = data.info.playerState;
-               
-               // 狀態對應: 1=播放中, 3=緩衝中, 2=暫停, 0=結束, -1=未開始
-               if (state === 1 || state === 3) {
-                 setIsPlaying(true);
-               } else if (state === 2 || state === -1) {
-                 setIsPlaying(false);
-               } else if (state === 0) {
-                 // 播放結束 -> 觸發下一首
-                 setIsPlaying(false);
-                 console.log("Video ended, playing next...");
-                 if (nextRef.current) nextRef.current(); 
-               }
-             }
-           } catch(e){}
-        }
-     };
-     window.addEventListener('message', handleMessage);
-     return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  if (!curItem) {
-     return (
-       <div className="max-w-4xl mx-auto space-y-6 p-12 text-center text-gray-500">
-          <button onClick={()=>setView('home')} className="flex items-center mx-auto mb-4 text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
-          載入中...
-       </div>
-     );
-  }
-  
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex justify-between mb-4">
-          <button onClick={()=>setView('home')} className="flex items-center text-gray-500"><SkipBack size={16} className="mr-1"/> 返回</button>
+          <button onClick={()=>setView('home')} className="flex items-center text-gray-500"><SkipBack size={16} className="mr-1"/> 返回列表</button>
           <button onClick={()=>setAudio(!audio)} className={`flex items-center px-3 py-1 rounded-full text-sm ${audio?'bg-purple-600 text-white':'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
             <Music size={16} className="mr-1" /> {audio?'純音樂模式 ON':'切換純音樂'}
           </button>
       </div>
 
-      {/* 播放器區域 (3. 純音樂模式自動縮小) */}
-      <div className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-300 ${audio ? 'h-48' : 'aspect-video'}`}>
-        
-        {/* Audio Mode Overlay */}
-        {audio && (
-          <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white p-8 pointer-events-none">
-             <Music size={40} className={`mb-4 ${isPlaying ? 'animate-pulse text-green-400' : 'text-gray-500'}`}/>
-             <h3 className="text-xl font-bold">{isPlaying ? '正在播放' : '已暫停 (點擊下方播放)'}</h3>
-             <p className="text-gray-400 text-sm mt-2 text-center line-clamp-2">{curTitle}</p>
-          </div>
-        )}
-        
-        {/* Iframe (隱藏但存在) */}
-        <iframe 
-          ref={iframeRef}
-          key={embed} // 強制重新渲染以確保切換順暢
-          className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`} 
-          src={embed} 
-          title="YouTube video player" 
-          frameBorder="0" 
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-          allowFullScreen
-        ></iframe>
-      </div>
-
-      {/* 1. 控制列 (移至下方，不遮擋畫面) */}
-      <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between border-t-4 border-red-600">
-         <div className="flex items-center space-x-4">
-            <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg flex-shrink-0">
-              {isPlaying ? <Pause size={24} fill="currentColor"/> : <Play size={24} fill="currentColor" className="ml-1"/>}
-            </button>
-            <div className="min-w-0">
-              <div className="text-xs text-gray-500 font-bold uppercase">Now Playing</div>
-              <div className="font-medium text-gray-900 truncate">{curTitle}</div>
-            </div>
-         </div>
+      {/* 播放器容器 */}
+      <div ref={containerRef} className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-300 ${audio ? 'h-32' : 'aspect-video'}`}>
+         {/* API 掛載點 */}
+         <div id="yt-player" className={`w-full h-full ${audio ? 'opacity-0' : 'opacity-100'}`}></div>
          
-         {item.type === 'playlist' && (
-           <div className="flex items-center space-x-2 flex-shrink-0">
-             <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full ${shuffle?'bg-indigo-100 text-indigo-600':'text-gray-400 hover:bg-gray-100'}`}><Shuffle size={20}/></button>
-             <button onClick={prev} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipBack size={20}/></button>
-             <button onClick={next} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipForward size={20}/></button>
-           </div>
+         {/* Audio 遮罩 */}
+         {audio && (
+          <div className="absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white pointer-events-none">
+             <Music size={32} className={`mb-2 ${isPlaying ? 'animate-pulse text-green-400' : 'text-gray-500'}`}/>
+             <p className="text-gray-300 text-sm font-medium truncate max-w-xs px-4">{curTitle}</p>
+          </div>
          )}
       </div>
 
-      {/* 詳細資訊與清單 */}
+      {/* 控制列 (含進度條) */}
+      <div className="bg-white rounded-lg shadow p-5 border-t-4 border-red-600 space-y-4">
+         {/* 進度條 */}
+         <div className="flex items-center space-x-3 text-xs text-gray-500 font-mono">
+            <span>{formatDuration(currentTime)}</span>
+            <input 
+              type="range" 
+              min="0" 
+              max={duration || 100} 
+              value={currentTime} 
+              onChange={handleSeek}
+              className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600"
+            />
+            <span>{formatDuration(duration)}</span>
+         </div>
+
+         <div className="flex items-center justify-between">
+             <div className="flex items-center space-x-4">
+                <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg flex-shrink-0">
+                  {isPlaying ? <Pause size={24} fill="currentColor"/> : <Play size={24} fill="currentColor" className="ml-1"/>}
+                </button>
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500 font-bold uppercase">Now Playing</div>
+                  <div className="font-medium text-gray-900 truncate max-w-[200px]">{curTitle}</div>
+                </div>
+             </div>
+             
+             {item.type === 'playlist' && (
+               <div className="flex items-center space-x-2">
+                 <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full ${shuffle?'bg-indigo-100 text-indigo-600':'text-gray-400 hover:bg-gray-100'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={20}/></button>
+                 <button onClick={handlePrev} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipBack size={20}/></button>
+                 <button onClick={handleNext} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipForward size={20}/></button>
+               </div>
+             )}
+         </div>
+      </div>
+
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-start">
           <div><h1 className="text-2xl font-bold mb-2">{item.title}</h1><p className="text-gray-600 whitespace-pre-wrap">{item.description}</p></div>
           <button onClick={openLink} className="flex-shrink-0 ml-4 px-4 py-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center"><ExternalLink size={18} className="mr-2"/> 原始連結</button>
         </div>
-        
         {item.type === 'playlist' && (
           <div className="mt-6 border-t pt-4">
             <h3 className="font-bold flex mb-4 text-gray-700"><List size={18} className="mr-2"/> 播放清單 ({vList.length})</h3>
