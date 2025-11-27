@@ -8,7 +8,7 @@ import {
   List, 
   Settings, 
   Trash2, 
-  Edit, // 新增 Edit 圖示
+  Edit, 
   Download, 
   Upload, 
   ExternalLink, 
@@ -20,7 +20,8 @@ import {
   Music,
   CheckSquare,
   Square,
-  FileText
+  FileText,
+  CheckCircle2 // 新增圖示
 } from 'lucide-react';
 
 // --- 工具函數 ---
@@ -159,6 +160,8 @@ const Header = ({ setView, isAdmin, handleLogout }) => (
 );
 
 const Dashboard = ({ items, viewItem }) => {
+  const [filter, setFilter] = useState('all'); 
+
   const stats = {
     totalItems: items.length,
     totalVisits: items.reduce((acc, curr) => acc + (curr.visits || 0), 0),
@@ -167,9 +170,13 @@ const Dashboard = ({ items, viewItem }) => {
     singles: items.filter(i => i.type === 'single').length,
   };
 
+  const filteredItems = items.filter(item => {
+    if (filter === 'all') return true;
+    return item.type === filter;
+  });
+
   return (
     <div className="space-y-6">
-      {/* 統計卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
           <div className="text-gray-500 text-sm">總項目數</div>
@@ -189,19 +196,37 @@ const Dashboard = ({ items, viewItem }) => {
         </div>
       </div>
 
-      {/* 列表 */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 font-bold text-gray-700 flex justify-between items-center">
-          <span>所有 YouTube 頁面</span>
-          <span className="text-xs font-normal text-gray-500">點擊標題進入</span>
+        <div className="px-6 py-4 border-b border-gray-200 font-bold text-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+             <button 
+               onClick={() => setFilter('all')}
+               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'all' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+             >
+               全部
+             </button>
+             <button 
+               onClick={() => setFilter('single')}
+               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'single' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+             >
+               單曲
+             </button>
+             <button 
+               onClick={() => setFilter('playlist')}
+               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filter === 'playlist' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+             >
+               播放清單
+             </button>
+          </div>
+          <span className="text-xs font-normal text-gray-500 hidden sm:block">點擊標題進入</span>
         </div>
-        {items.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            目前沒有資料，請點擊右上角「新增頁面」建立。
+            此分類目前沒有資料。
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {items.map(item => (
+            {filteredItems.map(item => (
               <li key={item.id} className="hover:bg-gray-50 transition duration-150">
                 <div className="px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center flex-1 cursor-pointer" onClick={() => viewItem(item)}>
@@ -255,6 +280,15 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
       setSelectedExistingIds(selectedExistingIds.filter(id => id !== itemId));
     } else {
       setSelectedExistingIds([...selectedExistingIds, itemId]);
+    }
+  };
+
+  // 全選/取消全選功能
+  const handleSelectAll = () => {
+    if (selectedExistingIds.length === existingSingles.length) {
+      setSelectedExistingIds([]);
+    } else {
+      setSelectedExistingIds(existingSingles.map(i => i.id));
     }
   };
 
@@ -319,7 +353,22 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
         ) : (
           <div className="space-y-6">
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">從現有單曲庫選擇</label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-gray-700">從現有單曲庫選擇</label>
+                {existingSingles.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
+                  >
+                    {selectedExistingIds.length === existingSingles.length ? (
+                      <>取消全選</>
+                    ) : (
+                      <>全選 ({existingSingles.length})</>
+                    )}
+                  </button>
+                )}
+              </div>
               {existingSingles.length === 0 ? (
                 <p className="text-sm text-gray-500">目前沒有已建立的單曲可供選擇。</p>
               ) : (
@@ -372,21 +421,16 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   );
 };
 
-// --- 新增：編輯頁面元件 ---
 const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
   const [type, setType] = useState(item.type);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [url, setUrl] = useState(item.type === 'single' ? item.url : '');
-  // 播放清單的連結
   const [playlistUrls, setPlaylistUrls] = useState(item.type === 'playlist' ? item.urls : ['']); 
-  // 從現有項目選擇的部分，這裡為了簡化編輯，我們將原有的 urls 載入到手動輸入框，
-  // 這樣使用者可以看見所有連結並進行編輯、排序或刪除，比較直觀。
   
   const existingSingles = items.filter(i => i.type === 'single');
   const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
 
-  // 初始化時，如果編輯播放清單，確保至少有一個空欄位
   useEffect(() => {
     if (type === 'playlist' && playlistUrls.length === 0) {
       setPlaylistUrls(['']);
@@ -410,6 +454,15 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
       setSelectedExistingIds(selectedExistingIds.filter(id => id !== itemId));
     } else {
       setSelectedExistingIds([...selectedExistingIds, itemId]);
+    }
+  };
+
+  // 全選/取消全選功能 (EditPage 也加上)
+  const handleSelectAll = () => {
+    if (selectedExistingIds.length === existingSingles.length) {
+      setSelectedExistingIds([]);
+    } else {
+      setSelectedExistingIds(existingSingles.map(i => i.id));
     }
   };
 
@@ -471,7 +524,22 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
         ) : (
           <div className="space-y-6">
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">加入更多單曲 (從現有庫)</label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-gray-700">加入更多單曲 (從現有庫)</label>
+                {existingSingles.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
+                  >
+                    {selectedExistingIds.length === existingSingles.length ? (
+                      <>取消全選</>
+                    ) : (
+                      <>全選 ({existingSingles.length})</>
+                    )}
+                  </button>
+                )}
+              </div>
               {existingSingles.length === 0 ? (
                 <p className="text-sm text-gray-500">目前沒有其他單曲可供選擇。</p>
               ) : (
