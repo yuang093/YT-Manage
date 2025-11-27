@@ -25,33 +25,54 @@ import {
   Square,
   FileText,
   Cloud,
-  HardDrive
+  HardDrive,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 
-// --- Firebase 初始化 (安全模式) ---
+// ============================================================================
+// ⚠️ 重要：若要在 Vercel 等外部網站使用雲端資料庫，請在此填入您的 Firebase 設定
+// ============================================================================
+// 1. 前往 https://console.firebase.google.com/ 建立專案
+// 2. 新增 Web App，複製 firebaseConfig 物件內容
+// 3. 將 null 替換為您的設定物件，例如： { apiKey: "...", authDomain: "...", ... }
+const YOUR_FIREBASE_CONFIG = null; 
+
+// --- Firebase 初始化 (智慧判斷模式) ---
 let app = null;
 let auth = null;
 let db = null;
 let appId = 'default-app-id';
 let isCloudAvailable = false;
+let configSource = 'none'; // 'env' (開發環境) or 'manual' (手動填寫) or 'none'
 
 try {
-  // 檢查環境變數是否存在
+  let configToUse = null;
+
+  // 優先檢查是否在開發環境 (Canvas)
   if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-    const firebaseConfig = JSON.parse(__firebase_config);
-    app = initializeApp(firebaseConfig);
+    configToUse = JSON.parse(__firebase_config);
+    if (typeof __app_id !== 'undefined') appId = __app_id;
+    configSource = 'env';
+  } 
+  // 其次檢查是否有手動填寫的設定 (Vercel/Production)
+  else if (YOUR_FIREBASE_CONFIG) {
+    configToUse = YOUR_FIREBASE_CONFIG;
+    configSource = 'manual';
+  }
+
+  if (configToUse) {
+    app = initializeApp(configToUse);
     auth = getAuth(app);
     db = getFirestore(app);
-    if (typeof __app_id !== 'undefined') {
-      appId = __app_id;
-    }
     isCloudAvailable = true;
-    console.log("Firebase initialized successfully.");
+    console.log(`Firebase initialized successfully using ${configSource} config.`);
   } else {
     console.log("No Firebase config found. Running in LocalStorage mode.");
   }
 } catch (e) {
-  console.warn("Firebase init failed (expected in local/vercel env without config):", e);
+  console.warn("Firebase init failed:", e);
+  isCloudAvailable = false;
 }
 
 // --- 工具函數 ---
@@ -555,8 +576,31 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport }) => {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-blue-50 p-4 border-b border-blue-100">
+        <h3 className="text-sm font-bold text-blue-800 mb-2 flex items-center"><Settings size={14} className="mr-1"/> 系統診斷</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="flex items-center">
+            <span className="text-gray-500 mr-2">目前資料模式:</span>
+            {isCloudAvailable ? 
+              <span className="text-green-600 font-bold flex items-center"><Cloud size={12} className="mr-1"/> 雲端 (Firebase)</span> : 
+              <span className="text-orange-600 font-bold flex items-center"><HardDrive size={12} className="mr-1"/> 本機 (LocalStorage)</span>
+            }
+          </div>
+          <div className="flex items-center">
+            <span className="text-gray-500 mr-2">設定檔狀態:</span>
+            {isCloudAvailable ? 
+              <span className="text-green-600 font-bold flex items-center"><CheckCircle size={12} className="mr-1"/> 已載入</span> : 
+              <span className="text-red-600 font-bold flex items-center"><AlertTriangle size={12} className="mr-1"/> 未偵測到</span>
+            }
+          </div>
+          <div className="flex items-center">
+             {!isCloudAvailable && <span className="text-gray-400">(請在程式碼頂端填寫 YOUR_FIREBASE_CONFIG)</span>}
+          </div>
+        </div>
+      </div>
+
       <div className="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center"><Settings className="mr-2" /> 管理後台</h2>
+        <h2 className="text-xl font-bold text-gray-800 flex items-center"><List className="mr-2" /> 列表管理</h2>
         <div className="flex space-x-2">
             <label className="cursor-pointer px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center"><Upload size={16} className="mr-2"/> 匯入 CSV<input type="file" className="hidden" accept=".csv" onChange={handleImport} /></label>
             <button onClick={handleExport} className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center"><Download size={16} className="mr-2"/> 匯出 CSV</button>
