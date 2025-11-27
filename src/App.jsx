@@ -27,7 +27,8 @@ import {
   Cloud,
   HardDrive,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 
 // ============================================================================
@@ -53,13 +54,11 @@ let configSource = 'none';
 try {
   let configToUse = null;
 
-  // 1. 優先檢查是否在開發環境 (Canvas)
   if (typeof __firebase_config !== 'undefined' && __firebase_config) {
     configToUse = JSON.parse(__firebase_config);
     if (typeof __app_id !== 'undefined') appId = __app_id;
     configSource = 'env';
   } 
-  // 2. 其次檢查是否有手動填寫的設定 (Vercel/Production)
   else if (YOUR_FIREBASE_CONFIG) {
     configToUse = YOUR_FIREBASE_CONFIG;
     configSource = 'manual';
@@ -100,8 +99,6 @@ const formatDate = (timestamp) => {
   });
 };
 
-// --- Helper: 統一處理影片物件 (字串相容模式) ---
-// 舊資料可能是純字串網址，新資料是物件 {title, url}
 const getVideoUrl = (item) => typeof item === 'string' ? item : item.url;
 const getVideoTitle = (item) => {
   if (typeof item === 'string') return item;
@@ -152,13 +149,14 @@ const csvToArray = (csvText) => {
 
 // --- 子元件 ---
 
-const Header = ({ setView, isAdmin, handleLogout }) => (
+const Header = ({ setView, isAdmin, handleLogout, isLoading }) => (
   <nav className="bg-red-600 text-white shadow-md">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between h-16">
         <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
           <Youtube className="w-8 h-8 mr-2" />
           <span className="font-bold text-xl tracking-tight">YT 管理大師</span>
+          {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
           <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 flex items-center">
@@ -236,7 +234,9 @@ const Dashboard = ({ items, viewItem }) => {
           <span className="text-xs font-normal text-gray-500 hidden sm:block">點擊標題進入</span>
         </div>
         {filteredItems.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">此分類目前沒有資料。</div>
+          <div className="p-8 text-center text-gray-500">
+            {items.length === 0 ? '正在讀取雲端資料...' : '此分類目前沒有資料。'}
+          </div>
         ) : (
           <ul className="divide-y divide-gray-200">
             {filteredItems.map(item => (
@@ -734,6 +734,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Auth & Data Init
   useEffect(() => {
@@ -761,23 +762,29 @@ export default function App() {
   // Data Sync (Cloud vs Local)
   useEffect(() => {
     if (isCloudAvailable && user && db) {
+      setIsLoading(true);
       // 雲端模式監聽
       const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items');
       const unsubscribe = onSnapshot(colRef, (snapshot) => {
         const loadedItems = snapshot.docs.map(doc => doc.data());
         loadedItems.sort((a, b) => b.createdAt - a.createdAt);
         setItems(loadedItems);
+        setIsLoading(false);
         // 同步備份到 LocalStorage
         localStorage.setItem('yt_manager_items', JSON.stringify(loadedItems));
       }, (error) => {
         console.error("Data fetch error:", error);
+        setIsLoading(false);
+        if (error.code === 'permission-denied') {
+           showNotification("資料庫權限不足！請檢查 Firebase Rules", 'error');
+        }
       });
       return () => unsubscribe();
     } else if (!isCloudAvailable) {
       // 本機模式：當 items 變動時存入 LocalStorage
       localStorage.setItem('yt_manager_items', JSON.stringify(items));
     }
-  }, [items, user]); // 注意依賴項
+  }, [user]); // Removed 'items' to fix loop
 
   // 強制 Referrer
   useEffect(() => {
@@ -914,7 +921,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-900 relative">
-      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} />
+      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading} />
       {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow-lg text-white z-50 ${notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'}`}>{notification.msg}</div>}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-4 sm:px-0">
