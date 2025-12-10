@@ -503,7 +503,7 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
            <div className="space-y-4">
              <div className="bg-gray-50 dark:bg-gray-700/50 p-4 border rounded border-gray-200 dark:border-gray-600">
                <div className="flex justify-between mb-2"><label className="text-gray-700 dark:text-gray-300">從庫選擇</label><button type="button" onClick={handleSelectAll} className="text-indigo-600 dark:text-indigo-400 text-sm">{selectedExistingIds.length === existingSingles.length ? '取消全選' : '全選'}</button></div>
-               <div className="max-h-40 overflow-y-auto grid grid-cols-2 gap-2">{existingSingles.map(i => (<div key={i.id} onClick={() => toggleSelection(i.id)} className={`cursor-pointer p-2 border rounded flex items-center ${selectedExistingIds.includes(i.id)?'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700':'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}><div className="mr-2 text-red-600 dark:text-red-400">{selectedExistingIds.includes(i.id)?<CheckSquare size={16}/>:<Square size={16}/>}</div><span className="truncate text-sm text-gray-900 dark:text-gray-100">{i.title}</span></div>))}</div>
+               <div className="max-h-40 overflow-y-auto grid grid-cols-2 gap-2">{existingSingles.map(i => (<div key={i.id} onClick={() => toggleSelection(i.id)} className={`cursor-pointer p-2 border rounded flex items-center ${selectedExistingIds.includes(i.id)?'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700':'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'}`}><div className="mr-2 text-red-600 dark:text-red-400">{selectedExistingIds.includes(i.id)?<CheckSquare size={16}/>:<Square size={16}/>}</div><span className="truncate text-sm text-gray-900 dark:text-gray-100">{i.title}</span></div>))}</div>
              </div>
              <div><label className="text-gray-700 dark:text-gray-300">編輯列表</label>{manualItems.map((m, i) => (<div key={i} className="flex mb-2 gap-2"><input placeholder="標題" className="w-1/3 border p-2 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={m.title} onChange={e=>handleManualItemChange(i,'title',e.target.value)}/><input placeholder="URL" className="flex-1 border p-2 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={m.url} onChange={e=>handleManualItemChange(i,'url',e.target.value)}/><button type="button" onClick={()=>removePlaylistField(i)} className="px-3 bg-gray-100 dark:bg-gray-600 rounded border border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300"><X size={16}/></button></div>))}<button type="button" onClick={addPlaylistField} className="text-red-600 dark:text-red-400 text-sm flex items-center"><Plus size={16}/> 新增</button></div>
            </div>
@@ -539,9 +539,14 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
   // 初始化播放清單
   useEffect(() => { 
-    if (item.type === 'single') setVList([item.url]); 
-    else setVList(item.urls); 
-    setIdx(0); 
+    if (item.type === 'single') {
+      setVList([item.url]); 
+      setIdx(0);
+    } else {
+      setVList(item.urls); 
+      // 隨機選擇一首作為開始
+      setIdx(Math.floor(Math.random() * item.urls.length));
+    }
     setIsPlaying(false);
   }, [item]);
 
