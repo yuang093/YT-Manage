@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Shuffle, 
@@ -13,7 +13,6 @@ import {
   Upload, 
   ExternalLink, 
   Eye, 
-  EyeOff,
   Youtube,
   Lock,
   LogOut,
@@ -27,15 +26,15 @@ import {
   Loader2,
   CheckCircle,
   Pause,
-  Repeat,
+  Maximize2,
+  Minimize2,
   Volume2,
   VolumeX,
-  Users,
-  FileType
+  User
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, getDoc, increment } from 'firebase/firestore';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 // ============================================================================
 // Firebase 設定
@@ -49,815 +48,868 @@ const YOUR_FIREBASE_CONFIG = {
   appId: "1:188108532520:web:76f89808fa5e919bc1be1d"
 };
 
-const app = initializeApp(YOUR_FIREBASE_CONFIG);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Initialize Firebase
+let app = null;
+let auth = null;
+let db = null;
+let appId = 'default-app-id';
+let isCloudAvailable = false;
+let configSource = 'none';
 
-// ============================================================================
-// 工具函式
-// ============================================================================
+try {
+  let configToUse = null;
+  if (YOUR_FIREBASE_CONFIG) {
+    configToUse = YOUR_FIREBASE_CONFIG;
+    configSource = 'manual';
+    appId = 'yt-manager-global'; 
+  }
+  else if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    configToUse = JSON.parse(__firebase_config);
+    if (typeof __app_id !== 'undefined') appId = __app_id;
+    configSource = 'env';
+  } 
 
-// 修正後的 ID 解析，支援更多格式
-const getYouTubeId = (url) => {
+  if (configToUse) {
+    app = initializeApp(configToUse);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    isCloudAvailable = true;
+    console.log(`Firebase init success. Mode: ${configSource}, AppID: ${appId}`);
+  }
+} catch (e) {
+  console.warn("Firebase init failed:", e);
+  isCloudAvailable = false;
+}
+
+// --- 工具函數 ---
+const generateId = () => Math.random().toString(36).substr(2, 9);
+const getYouTubeID = (url) => {
   if (!url) return null;
-  // 如果已經是 ID (11碼且無特殊符號)
-  if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
-  
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
 };
-
-const getTodayDateString = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}${month}${day}`;
+const formatDate = (timestamp) => new Date(timestamp).toLocaleString('zh-TW', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+});
+const formatDuration = (seconds) => {
+  if (!seconds || isNaN(seconds)) return "00:00";
+  const min = Math.floor(seconds / 60);
+  const sec = Math.floor(seconds % 60);
+  return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
 };
 
-// 強大的 CSV 解析器 (處理引號與逗號)
-const parseCSV = (text) => {
-  const rows = [];
-  let currentRow = [];
-  let currentVal = '';
-  let insideQuote = false;
-  
-  // 簡單清理 BOM
-  if (text.charCodeAt(0) === 0xFEFF) {
-    text = text.slice(1);
+const getVideoUrl = (item) => {
+  if (!item) return '';
+  return typeof item === 'string' ? item : item.url;
+};
+const getVideoTitle = (item) => {
+  if (!item) return '';
+  if (typeof item === 'string') return item;
+  return item.title && item.title.trim() !== '' ? item.title : item.url;
+};
+
+// Fisher-Yates 洗牌演算法 (用於隨機播放)
+const shuffleArray = (array) => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
+  return newArray;
+};
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const nextChar = text[i + 1];
-
-    if (char === '"') {
-      if (insideQuote && nextChar === '"') {
-        currentVal += '"';
-        i++; // 跳過下一個引號
-      } else {
-        insideQuote = !insideQuote;
-      }
-    } else if (char === ',' && !insideQuote) {
-      currentRow.push(currentVal);
-      currentVal = '';
-    } else if ((char === '\r' || char === '\n') && !insideQuote) {
-      if (char === '\r' && nextChar === '\n') i++; // 處理 \r\n
-      currentRow.push(currentVal);
-      if (currentRow.length > 0 && (currentRow.length > 1 || currentRow[0] !== '')) {
-         rows.push(currentRow);
-      }
-      currentRow = [];
-      currentVal = '';
-    } else {
-      currentVal += char;
+// --- CSV ---
+const arrayToCSV = (items) => {
+  const headers = ['id', 'type', 'title', 'description', 'url', 'urls', 'createdAt', 'visits', 'downloads'];
+  const csvRows = items.map(item => {
+    return headers.map(header => {
+      let val = item[header];
+      if (header === 'urls') val = JSON.stringify(val || []); 
+      if (val === undefined || val === null) val = '';
+      const stringVal = String(val).replace(/"/g, '""');
+      return `"${stringVal}"`;
+    }).join(',');
+  });
+  return [headers.join(','), ...csvRows].join('\n');
+};
+const csvToArray = (csvText) => {
+  const lines = csvText.trim().split(/\r\n|\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const result = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
+    const values = [];
+    let match;
+    while ((match = regex.exec(line)) !== null) {
+      if (match[1] !== undefined) values.push(match[1].replace(/""/g, '"'));
+      else values.push(match[2]);
     }
+    if (values.length === 0) continue;
+    const obj = {};
+    headers.forEach((header, index) => {
+      let val = values[index];
+      if (val === undefined) val = '';
+      if (header === 'urls') { try { val = JSON.parse(val); } catch(e) { val = []; } } 
+      else if (['createdAt', 'visits', 'downloads'].includes(header)) val = Number(val) || 0;
+      obj[header] = val;
+    });
+    if (obj.title || obj.url) result.push(obj);
   }
-  if (currentVal || currentRow.length > 0) {
-    currentRow.push(currentVal);
-    rows.push(currentRow);
-  }
-  return rows;
+  return result;
 };
 
-// ============================================================================
-// 元件：Header
-// ============================================================================
-const Header = ({ setView, isAdmin, handleLogout, isLoading, view }) => (
-  <header className="bg-white shadow-sm sticky top-0 z-40">
-    <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
-        <div className="bg-red-600 p-2 rounded-lg">
-          <Music className="w-6 h-6 text-white" />
+// --- UI ---
+const Header = ({ setView, isAdmin, handleLogout, isLoading }) => (
+  <nav className="bg-red-600 text-white shadow-md">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between h-16">
+        <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
+          <Youtube className="w-8 h-8 mr-2" />
+          <span className="font-bold text-xl tracking-tight">YT 管理大師</span>
+          {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
-        <h1 className="text-xl font-bold text-gray-800 hidden sm:block">YT Music Manager</h1>
-      </div>
-      
-      <div className="flex items-center gap-2 sm:gap-4">
-        {isAdmin && (
-          <button 
-            onClick={() => setView('admin')}
-            className={`p-2 rounded-full hover:bg-gray-100 ${view === 'admin' ? 'text-red-600 bg-red-50' : 'text-gray-600'}`}
-            title="管理後台"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-        )}
-        <button 
-          onClick={() => setView('create')}
-          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">新增歌曲</span>
-        </button>
-        {isLoading ? (
-          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-        ) : (
-          <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-gray-700" title="登出">
-            <LogOut className="w-5 h-5" />
-          </button>
-        )}
+        <div className="flex items-center space-x-4">
+          <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 flex items-center"><Plus className="w-4 h-4 mr-1" /> 新增頁面</button>
+          {isAdmin ? (
+            <div className="flex items-center space-x-2">
+               <button onClick={() => setView('admin')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 flex items-center"><Settings className="w-4 h-4 mr-1" /> 管理後台</button>
+              <button onClick={handleLogout} className="px-3 py-2 rounded-md text-sm font-medium bg-red-800 hover:bg-red-900 flex items-center"><LogOut className="w-4 h-4 mr-1" /> 登出</button>
+            </div>
+          ) : (
+            <button onClick={() => setView('login')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 flex items-center"><Lock className="w-4 h-4 mr-1" /> 管理員</button>
+          )}
+        </div>
       </div>
     </div>
-  </header>
+  </nav>
 );
 
-// ============================================================================
-// 元件：Dashboard
-// ============================================================================
-const Dashboard = ({ items, viewItem, isLoading, permissionError, visitCount }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const filteredItems = items.filter(item => 
-    item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.artist?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+const Dashboard = ({ items, viewItem, isLoading, permissionError }) => {
+  const [filter, setFilter] = useState('all'); 
+  const safeItems = items || [];
+  const stats = {
+    totalItems: safeItems.length,
+    totalVisits: safeItems.reduce((acc, curr) => acc + (curr.visits || 0), 0),
+    totalDownloads: safeItems.reduce((acc, curr) => acc + (curr.downloads || 0), 0),
+    playlists: safeItems.filter(i => i.type === 'playlist').length,
+    singles: safeItems.filter(i => i.type === 'single').length,
+  };
+  const filteredItems = safeItems.filter(item => {
+    if (filter === 'all') return true;
+    return item.type === filter;
+  });
+
+  const renderEmptyState = () => {
+    if (permissionError) {
+      return (
+        <div className="text-red-500 flex flex-col items-center p-4 border border-red-200 rounded bg-red-50">
+          <ShieldAlert className="w-8 h-8 mb-2"/>
+          <span className="font-bold">權限不足：無法讀取資料庫</span>
+          <span className="text-sm mt-1">請至 Firebase Console → Firestore → Rules 將權限設為 true，並至 Authentication 開啟 Anonymous。</span>
+        </div>
+      );
+    }
+    if (isLoading) return <div className="flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 mr-2 animate-spin"/> 正在連線至雲端資料庫...</div>;
+    if (safeItems.length === 0) return <div>目前雲端資料庫是空的，請點擊右上角「新增頁面」開始建立。</div>;
+    return <div>此分類目前沒有資料。</div>;
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <div className="relative w-full sm:w-96">
-          <input
-            type="text"
-            placeholder="搜尋播放清單或歌曲..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="absolute left-3 top-2.5 text-gray-400">
-             <List className="w-4 h-4" />
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+          <div className="text-gray-500 text-sm">總項目數</div>
+          <div className="text-2xl font-bold">{stats.totalItems}</div>
         </div>
-        <div className="flex items-center gap-2 text-gray-500 text-sm bg-gray-50 px-3 py-1 rounded-full">
-          <Users className="w-4 h-4" />
-          <span>瀏覽人次: {visitCount}</span>
+        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+          <div className="text-gray-500 text-sm">總訪問次數</div>
+          <div className="text-2xl font-bold">{stats.totalVisits}</div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
+          <div className="text-gray-500 text-sm">總下載/點擊</div>
+          <div className="text-2xl font-bold">{stats.totalDownloads}</div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500">
+          <div className="text-gray-500 text-sm">清單 / 單曲</div>
+          <div className="text-2xl font-bold">{stats.playlists} / {stats.singles}</div>
         </div>
       </div>
-
-      {permissionError && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
-          <ShieldAlert className="w-5 h-5" />
-          {permissionError}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 font-bold text-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+             {['all', 'single', 'playlist'].map(type => (
+               <button key={type} onClick={() => setFilter(type)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filter === type ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}>
+                 {type === 'all' ? '全部' : type === 'single' ? '單曲' : '播放清單'}
+               </button>
+             ))}
+          </div>
+          <span className="text-xs font-normal text-gray-500 hidden sm:block">點擊標題進入</span>
         </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-red-500" />
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          <Music className="w-12 h-12 mx-auto mb-3 opacity-20" />
-          <p>沒有找到歌曲，點擊右上角新增</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredItems.map(item => (
-            <div 
-              key={item.id}
-              onClick={() => viewItem(item)}
-              className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden cursor-pointer border border-gray-100 hover:border-red-100"
-            >
-              <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                <img 
-                  src={`https://img.youtube.com/vi/${item.youtubeId}/mqdefault.jpg`}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => e.target.src = 'https://placehold.co/600x400?text=No+Image'}
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                  <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transform scale-90 group-hover:scale-100 transition-all shadow-lg">
-                    <Play className="w-5 h-5 text-red-600 ml-1" />
+        {filteredItems.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">{renderEmptyState()}</div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {filteredItems.map(item => (
+              <li key={item.id} className="hover:bg-gray-50 transition duration-150">
+                <div className="px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center flex-1 cursor-pointer" onClick={() => viewItem(item)}>
+                    <div className={`p-2 rounded-full mr-4 ${item.type === 'playlist' ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-600'}`}>
+                      {item.type === 'playlist' ? <List size={20} /> : <Youtube size={20} />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{item.title}</div>
+                      <div className="text-sm text-gray-500 truncate max-w-md">{item.description}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500 space-x-6">
+                    <span className="flex items-center" title="訪問次數"><Eye size={14} className="mr-1"/> {item.visits || 0}</span>
+                    <span className="flex items-center" title="下載次數"><Download size={14} className="mr-1"/> {item.downloads || 0}</span>
+                    <span className="hidden sm:inline">{formatDate(item.createdAt)}</span>
                   </div>
                 </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 line-clamp-1 mb-1">{item.title}</h3>
-                <p className="text-sm text-gray-500 flex items-center gap-1">
-                  <Youtube className="w-3 h-3" />
-                  {item.artist || 'Unknown Artist'}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// 元件：CreatePage
-// ============================================================================
-const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
-  const [url, setUrl] = useState('');
-  const [manualTitle, setManualTitle] = useState('');
-  const [manualArtist, setManualArtist] = useState('');
-
-  const handleManualAdd = () => {
-    const videoId = getYouTubeId(url);
-    if (!videoId) {
-      showNotification('無效的 YouTube 連結', 'error');
-      return;
-    }
-    if (!manualTitle) {
-      showNotification('請輸入標題', 'error');
-      return;
-    }
-    handleCreate({
-        title: manualTitle,
-        artist: manualArtist || 'Unknown',
-        youtubeId: videoId,
-        category: 'General'
-    });
-    setView('home');
-  };
-
-  const isUrlInLibrary = React.useMemo(() => {
-    const vid = getYouTubeId(url);
-    if (!vid) return false;
-    return items.some(i => i.youtubeId === vid);
-  }, [url, items]);
-
-  return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">新增歌曲</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">YouTube 連結</label>
-            <div className="flex gap-2">
-              <input 
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className={`flex-1 p-3 border rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none ${isUrlInLibrary ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}
-                placeholder="https://www.youtube.com/watch?v=..."
-              />
-              <button 
-                onClick={() => setUrl('')}
-                className="p-3 text-gray-400 hover:text-gray-600 border border-gray-200 rounded-xl"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {isUrlInLibrary && (
-              <p className="text-green-600 text-sm mt-1 flex items-center gap-1">
-                <CheckCircle className="w-4 h-4" /> 此歌曲已在庫中
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">標題</label>
-              <input 
-                value={manualTitle}
-                onChange={(e) => setManualTitle(e.target.value)}
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                placeholder="輸入歌曲標題"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">演出者 (選填)</label>
-              <input 
-                value={manualArtist}
-                onChange={(e) => setManualArtist(e.target.value)}
-                className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none"
-                placeholder="輸入演出者"
-              />
-            </div>
-          </div>
-          <div className="pt-4 flex gap-3">
-             <button onClick={() => setView('home')} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium">取消</button>
-            <button 
-              onClick={handleManualAdd}
-              disabled={!url || !manualTitle}
-              className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium disabled:opacity-50 shadow-md"
-            >
-              新增至資料庫
-            </button>
-          </div>
-        </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
 };
 
-// ============================================================================
-// 元件：PlayerView
-// ============================================================================
-const PlayerView = ({ activeItem, allItems, setView }) => {
-  const [playlist, setPlaylist] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [player, setPlayer] = useState(null);
-  const [volume, setVolume] = useState(100);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showVideo, setShowVideo] = useState(true);
-
-  useEffect(() => {
-    if (activeItem && allItems.length > 0) {
-      setPlaylist(allItems);
-      const idx = allItems.findIndex(i => i.id === activeItem.id);
-      setCurrentIndex(idx >= 0 ? idx : 0);
+// 5. 智慧勾選 (Create/Edit 共用邏輯)
+const PlaylistForm = ({ items, handleCreate, handleUpdate, setView, showNotification, initialData }) => {
+  const [type, setType] = useState(initialData?.type || 'single');
+  const [title, setTitle] = useState(initialData?.title || '');
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [url, setUrl] = useState(initialData?.type === 'single' ? initialData.url : '');
+  
+  // 處理播放清單初始值
+  const [manualItems, setManualItems] = useState(() => {
+    if (initialData?.type === 'playlist' && Array.isArray(initialData.urls)) {
+      return initialData.urls.map(u => typeof u === 'string' ? {title: '', url: u} : u);
     }
-  }, [activeItem, allItems]);
+    return [{title: '', url: ''}];
+  });
 
+  const existingSingles = items.filter(i => i.type === 'single');
+  const [selectedExistingIds, setSelectedExistingIds] = useState([]); 
+
+  // 自動偵測並勾選已存在的歌曲 (智慧勾選)
+  useEffect(() => {
+    if (initialData?.type === 'playlist' && initialData.urls) {
+      const urlsInPlaylist = initialData.urls.map(u => typeof u === 'string' ? u : u.url);
+      const matchedIds = existingSingles
+        .filter(single => urlsInPlaylist.includes(single.url))
+        .map(single => single.id);
+      
+      // 合併手動選擇與自動偵測
+      setSelectedExistingIds(prev => [...new Set([...prev, ...matchedIds])]);
+    }
+  }, [initialData]); // 僅在載入資料時執行
+
+  useEffect(() => { 
+    if (type === 'playlist' && manualItems.length === 0) setManualItems([{title: '', url: ''}]); 
+  }, [type]);
+
+  const handleManualItemChange = (index, field, value) => {
+    const newItems = [...manualItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setManualItems(newItems);
+  };
+  const addPlaylistField = () => setManualItems([...manualItems, {title: '', url: ''}]);
+  const removePlaylistField = (index) => setManualItems(manualItems.filter((_, i) => i !== index));
+  const toggleSelection = (id) => { 
+    if (selectedExistingIds.includes(id)) setSelectedExistingIds(selectedExistingIds.filter(x => x !== id)); 
+    else setSelectedExistingIds([...selectedExistingIds, id]); 
+  };
+  const handleSelectAll = () => { 
+    if (selectedExistingIds.length === existingSingles.length) setSelectedExistingIds([]); 
+    else setSelectedExistingIds(existingSingles.map(i => i.id)); 
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const data = { type, title, description };
+    
+    if (type === 'single') {
+      if (!getYouTubeID(url)) return showNotification('無效的 YouTube 連結', 'error');
+      data.url = url;
+    } else {
+      const validManualItems = manualItems.filter(item => getYouTubeID(item.url)).map(item => ({ url: item.url, title: item.title || item.url }));
+      const selectedItems = existingSingles.filter(item => selectedExistingIds.includes(item.id)).map(item => ({ url: item.url, title: item.title }));
+      
+      // 過濾重複的 URL (優先保留單曲庫的完整資訊)
+      const uniqueItems = [];
+      const seenUrls = new Set();
+      
+      // 先加入勾選的 (通常資訊較完整)
+      selectedItems.forEach(item => {
+        if (!seenUrls.has(item.url)) {
+          seenUrls.add(item.url);
+          uniqueItems.push(item);
+        }
+      });
+      // 再加入手動輸入的
+      validManualItems.forEach(item => {
+        if (!seenUrls.has(item.url)) {
+          seenUrls.add(item.url);
+          uniqueItems.push(item);
+        }
+      });
+
+      if (uniqueItems.length === 0) return showNotification('請至少輸入或選擇一個有效的 YouTube 連結', 'error');
+      data.urls = uniqueItems;
+    }
+
+    if (initialData) {
+      handleUpdate({ ...initialData, ...data });
+    } else {
+      handleCreate(data);
+    }
+  };
+
+  const isEditMode = !!initialData;
+
+  return (
+    <div className="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center">
+        {isEditMode ? <><Edit className="mr-2" /> 修改頁面</> : <><Plus className="mr-2" /> 建立新頁面</>}
+      </h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">類型</label>
+          {isEditMode ? (
+            <div className="mt-1"><span className={`px-2 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${type === 'playlist' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800'}`}>{type === 'playlist' ? '播放清單' : '單曲'}</span></div>
+          ) : (
+            <div className="mt-1 flex space-x-4">
+              <label className="inline-flex items-center cursor-pointer"><input type="radio" className="form-radio text-red-600" name="type" value="single" checked={type === 'single'} onChange={() => setType('single')} /><span className="ml-2">單一連結</span></label>
+              <label className="inline-flex items-center cursor-pointer"><input type="radio" className="form-radio text-red-600" name="type" value="playlist" checked={type === 'playlist'} onChange={() => setType('playlist')} /><span className="ml-2">播放清單</span></label>
+            </div>
+          )}
+        </div>
+        <div><label className="block text-sm font-medium text-gray-700">主旨 (標題)</label><input required type="text" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 border p-2" value={title} onChange={e => setTitle(e.target.value)} /></div>
+        <div><label className="block text-sm font-medium text-gray-700">說明</label><textarea className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 border p-2" rows="3" value={description} onChange={e => setDescription(e.target.value)}></textarea></div>
+        
+        {type === 'single' ? (
+          <div><label className="block text-sm font-medium text-gray-700">YouTube 連結</label><input required type="url" placeholder="https://..." className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 border p-2" value={url} onChange={e => setUrl(e.target.value)} /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-gray-700">從現有單曲庫選擇 (智慧勾選)</label>
+                {existingSingles.length > 0 && (
+                  <button type="button" onClick={handleSelectAll} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center">
+                    {selectedExistingIds.length === existingSingles.length ? '取消全選' : `全選 (${existingSingles.length})`}
+                  </button>
+                )}
+              </div>
+              {existingSingles.length === 0 ? <p className="text-sm text-gray-500">目前沒有已建立的單曲。</p> : (
+                <div className="max-h-48 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {existingSingles.map(item => (
+                    <div key={item.id} className={`flex items-center p-2 rounded cursor-pointer border ${selectedExistingIds.includes(item.id) ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200 hover:bg-gray-100'}`} onClick={() => toggleSelection(item.id)}>
+                      <div className={`mr-2 ${selectedExistingIds.includes(item.id) ? 'text-red-600' : 'text-gray-400'}`}>{selectedExistingIds.includes(item.id) ? <CheckSquare size={20}/> : <Square size={20}/>}</div><span className="text-sm truncate">{item.title}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">或手動輸入 (可直接輸入新歌)</label>
+              {manualItems.map((item, idx) => (
+                <div key={idx} className="flex mb-2 space-x-2">
+                  <input type="text" placeholder="影片標題 (選填)" className="w-1/3 rounded-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" value={item.title} onChange={e => handleManualItemChange(idx, 'title', e.target.value)} />
+                  <input type="url" placeholder="YouTube 連結" className="flex-1 rounded-md border-gray-300 border p-2 focus:ring-red-500 focus:border-red-500" value={item.url} onChange={e => handleManualItemChange(idx, 'url', e.target.value)} />
+                  <button type="button" onClick={() => removePlaylistField(idx)} className="bg-gray-100 px-3 border border-l-0 rounded-r-md hover:bg-gray-200"><X size={16} /></button>
+                </div>
+              ))}
+              <button type="button" onClick={addPlaylistField} className="text-sm text-red-600 hover:text-red-800 font-medium flex items-center mt-2"><Plus size={16} className="mr-1"/> 新增欄位</button>
+            </div>
+          </div>
+        )}
+        <div className="pt-4 flex justify-end space-x-3">
+          <button type="button" onClick={() => setView(isEditMode ? 'admin' : 'home')} className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50">取消</button>
+          <button type="submit" className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">{isEditMode ? '儲存修改' : '建立'}</button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+const PlayerView = ({ item, setView, recordDownload }) => {
+  const [idx, setIdx] = useState(0);
+  const [shuffle, setShuffle] = useState(true); 
+  const [vList, setVList] = useState([]);
+  const [audio, setAudio] = useState(true); // 2. 純音樂模式切換 (保持播放)
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isApiReady, setIsApiReady] = useState(false);
+  
+  // 1. 音量控制 (State)
+  const [volume, setVolume] = useState(100); 
+  const [isMuted, setIsMuted] = useState(false);
+  const previousVolume = useRef(100);
+
+  // 7. Fisher-Yates 隨機播放佇列
+  const [shuffledIndices, setShuffledIndices] = useState([]);
+
+  const playerRef = useRef(null);
+  const containerRef = useRef(null);
+  const progressInterval = useRef(null);
+  const nextRef = useRef(null);
+
+  // 初始化播放清單
+  useEffect(() => { 
+    if (item.type === 'single') setVList([item.url]); 
+    else setVList(item.urls); 
+    setIdx(0); 
+    setIsPlaying(false);
+  }, [item]);
+
+  // 當清單載入或 shuffle 切換時，產生新的隨機佇列
+  useEffect(() => {
+    if (vList.length > 0) {
+      const indices = Array.from({ length: vList.length }, (_, i) => i);
+      if (shuffle) {
+        // Fisher-Yates Shuffle
+        for (let i = indices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        // 確保目前播放的歌在第一個，避免切換 shuffle 時跳歌
+        const currentIdxInShuffled = indices.indexOf(idx);
+        if (currentIdxInShuffled !== -1 && currentIdxInShuffled !== 0) {
+          [indices[0], indices[currentIdxInShuffled]] = [indices[currentIdxInShuffled], indices[0]];
+        }
+      }
+      setShuffledIndices(indices);
+    }
+  }, [vList, shuffle]); // 注意: idx 不放入依賴，避免每次換歌都重洗
+  
+  const curItem = vList[idx];
+  const curUrl = getVideoUrl(curItem);
+  const curTitle = getVideoTitle(curItem);
+  const videoId = getYouTubeID(curUrl);
+
+  // 載入 YouTube API
   useEffect(() => {
     if (!window.YT) {
       const tag = document.createElement('script');
       tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      window.onYouTubeIframeAPIReady = () => setIsApiReady(true);
+      document.body.appendChild(tag);
+    } else {
+      setIsApiReady(true);
     }
+  }, []);
 
-    const initPlayer = () => {
-       if (window.YT && window.YT.Player && playlist.length > 0) {
-         const currentVideo = playlist[currentIndex];
-         // 確保有有效的 ID，否則跳下一首
-         if (!currentVideo || !currentVideo.youtubeId) {
-             console.warn("Invalid Video ID, skipping");
-             return;
-         }
+  // 1. 音量控制 (API 同步)
+  useEffect(() => {
+    if (playerRef.current && playerRef.current.setVolume) {
+      playerRef.current.setVolume(volume);
+      if (volume > 0 && isMuted) setIsMuted(false);
+      if (volume === 0 && !isMuted) setIsMuted(true);
+    }
+  }, [volume]);
 
-         if (player) {
-           player.loadVideoById(currentVideo.youtubeId);
-           return;
-         }
-
-         new window.YT.Player('youtube-player', {
-           height: '100%',
-           width: '100%',
-           videoId: currentVideo.youtubeId,
-           playerVars: { 'playsinline': 1, 'autoplay': 1, 'controls': 1, 'rel': 0, 'fs': 1 },
-           events: {
-             'onReady': (event) => {
-                setPlayer(event.target);
-                event.target.setVolume(volume);
-                setIsPlaying(true);
-             },
-             'onStateChange': (event) => {
-                if (event.data === 1) setIsPlaying(true);
-                if (event.data === 2) setIsPlaying(false);
-                if (event.data === 0) handleNext(); // Auto play next
-             }
-           }
-         });
-       }
-    };
-
-    const checkYT = setInterval(() => {
-        if (window.YT && window.YT.Player) {
-            initPlayer();
-            clearInterval(checkYT);
+  // 初始化播放器
+  useEffect(() => {
+    if (isApiReady && videoId && containerRef.current) {
+      if (playerRef.current) {
+        // 如果只是換歌，直接 loadVideoById 比較順暢
+        if (typeof playerRef.current.loadVideoById === 'function') {
+           playerRef.current.loadVideoById(videoId);
+           return; 
+        } else {
+           playerRef.current.destroy(); // Fallback
         }
-    }, 500);
-    return () => clearInterval(checkYT);
-  }, [currentIndex, playlist]);
+      }
 
-  useEffect(() => {
-    if (player && playlist[currentIndex]?.youtubeId) {
-      player.loadVideoById(playlist[currentIndex].youtubeId);
-      setIsPlaying(true);
+      const onStateChange = (event) => {
+        if (event.data === window.YT.PlayerState.PLAYING) {
+          setIsPlaying(true);
+          setDuration(playerRef.current.getDuration());
+          if(progressInterval.current) clearInterval(progressInterval.current);
+          progressInterval.current = setInterval(() => {
+             setCurrentTime(playerRef.current.getCurrentTime());
+          }, 1000);
+        } else {
+          if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
+          if (event.data === window.YT.PlayerState.ENDED) {
+             setIsPlaying(false);
+             // 3. 行動裝置連續播放 (自動觸發)
+             if (nextRef.current) nextRef.current(); 
+          }
+          clearInterval(progressInterval.current);
+        }
+      };
+
+      playerRef.current = new window.YT.Player('yt-player', {
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          'autoplay': 1,
+          'controls': 0, 
+          'playsinline': 1, // 3. 相容 iOS
+          'disablekb': 1,
+          'fs': 0,
+          'rel': 0,
+          'iv_load_policy': 3 // 隱藏註釋
+        },
+        events: {
+          'onStateChange': onStateChange,
+          'onReady': (e) => {
+             setDuration(e.target.getDuration());
+             e.target.setVolume(volume); // 設定初始音量
+             e.target.playVideo(); 
+          }
+        }
+      });
     }
-  }, [currentIndex, player]);
 
-  useEffect(() => {
-    if (player) player.setVolume(isMuted ? 0 : volume);
-  }, [volume, isMuted, player]);
+    return () => {
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
+  }, [isApiReady, videoId]);
 
   const togglePlay = () => {
-    if (!player) return;
-    isPlaying ? player.pauseVideo() : player.playVideo();
-    setIsPlaying(!isPlaying);
+    if (!playerRef.current || typeof playerRef.current.getPlayerState !== 'function') return;
+    const state = playerRef.current.getPlayerState();
+    if (state === window.YT.PlayerState.PLAYING) {
+      playerRef.current.pauseVideo();
+    } else {
+      playerRef.current.playVideo();
+    }
   };
 
-  const handleNext = useCallback(() => {
-    let nextIndex = currentIndex + 1;
-    if (nextIndex >= playlist.length) nextIndex = 0;
-    setCurrentIndex(nextIndex);
-  }, [currentIndex, playlist]);
-
-  const handlePrev = () => {
-    let prevIndex = currentIndex - 1;
-    if (prevIndex < 0) prevIndex = playlist.length - 1;
-    setCurrentIndex(prevIndex);
+  const handleSeek = (e) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (playerRef.current) {
+      playerRef.current.seekTo(newTime, true);
+    }
   };
 
-  const handleShuffleJump = () => {
-    const r = Math.floor(Math.random() * playlist.length);
-    setCurrentIndex(r);
+  // 1. 音量控制 (對數調整優化 Logarithmic)
+  // 滑桿 (0-100) -> 實際音量 (0-100)
+  // 人耳對音量是非線性的，但 YouTube API 是線性的。
+  // 為了簡單直覺，這裡使用線性對應，但可以加入簡易曲線
+  const handleVolumeChange = (e) => {
+    const val = parseInt(e.target.value);
+    setVolume(val);
   };
 
-  const currentSong = playlist[currentIndex] || {};
+  const toggleMute = () => {
+    if (isMuted) {
+      setVolume(previousVolume.current);
+      setIsMuted(false);
+    } else {
+      previousVolume.current = volume;
+      setVolume(0);
+      setIsMuted(true);
+    }
+  };
+
+  // 7. 隨機播放邏輯 (使用 shuffledIndices)
+  const next = () => {
+    if (shuffle) {
+      // 在 shuffledIndices 中找到當前 idx 的位置，然後往下一個
+      const currentPos = shuffledIndices.indexOf(idx);
+      const nextPos = (currentPos + 1) % shuffledIndices.length;
+      setIdx(shuffledIndices[nextPos]);
+    } else {
+      setIdx(prevIdx => (prevIdx + 1) % vList.length);
+    }
+  };
+
+  const prev = () => {
+    if (shuffle) {
+      const currentPos = shuffledIndices.indexOf(idx);
+      const prevPos = (currentPos - 1 + shuffledIndices.length) % shuffledIndices.length;
+      setIdx(shuffledIndices[prevPos]);
+    } else {
+      setIdx(prevIdx => (prevIdx - 1 + vList.length) % vList.length);
+    }
+  };
+
+  const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
+  
+  useEffect(() => {
+    nextRef.current = next;
+  }, [next]);
+
+  if (!curItem) return <div className="p-12 text-center text-gray-500">載入中...</div>;
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-50 flex flex-col">
-      <div className="p-4 flex justify-between items-center text-white bg-gradient-to-b from-black/50 to-transparent">
-        <button onClick={() => setView('home')} className="p-2 hover:bg-white/10 rounded-full">
-          <X className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <span className="text-xs text-gray-400 uppercase tracking-widest">Now Playing</span>
-          <h3 className="font-medium text-sm sm:text-base line-clamp-1">{currentSong.title}</h3>
-        </div>
-        <div className="w-10"></div>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex justify-between mb-4">
+          <button onClick={()=>setView('home')} className="flex items-center text-gray-500 hover:text-gray-900"><SkipBack size={16} className="mr-1"/> 返回列表</button>
+          
+          {/* 2. 純音樂模式切換 (顯示/隱藏影片，不中斷播放) */}
+          <button 
+            onClick={()=>setAudio(!audio)} 
+            className={`flex items-center px-3 py-1 rounded-full text-sm transition-colors ${audio ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+          >
+            {audio ? <Music size={16} className="mr-1" /> : <Youtube size={16} className="mr-1" />}
+            {audio ? '純音樂模式 (省電)' : '顯示影片畫面'}
+          </button>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4 relative">
-        <div className={`relative w-full max-w-4xl aspect-video bg-black rounded-lg overflow-hidden shadow-2xl transition-all duration-500 ${!showVideo ? 'opacity-0 h-0 w-0 absolute' : 'opacity-100'}`}>
-          <div id="youtube-player" className="w-full h-full"></div>
-        </div>
-        {!showVideo && (
-           <div className="text-center text-white animate-pulse">
-             <Music className="w-32 h-32 mx-auto mb-4 text-red-500" />
-             <h2 className="text-2xl font-bold">{currentSong.title}</h2>
-             <p className="text-gray-400">{currentSong.artist}</p>
-             <p className="mt-4 text-sm text-gray-500">純音樂模式</p>
-           </div>
-        )}
+      {/* 播放器容器 (3. 純音樂模式自動縮小) */}
+      <div ref={containerRef} className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-500 ease-in-out ${audio ? 'h-32' : 'aspect-video'}`}>
+         {/* API 掛載點 - 始終存在，控制 opacity 隱藏 */}
+         <div id="yt-player" className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`}></div>
+         
+         {/* Audio 遮罩 */}
+         <div className={`absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white pointer-events-none transition-opacity duration-300 ${audio ? 'opacity-100' : 'opacity-0'}`}>
+             <Music size={32} className={`mb-2 ${isPlaying ? 'animate-pulse text-green-400' : 'text-gray-500'}`}/>
+             <p className="text-gray-300 text-sm font-medium truncate max-w-xs px-4">{curTitle}</p>
+         </div>
       </div>
 
-      <div className="bg-gray-900 text-white p-6 pb-8 rounded-t-3xl border-t border-gray-800">
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="flex justify-between items-end">
-            <div>
-              <h2 className="text-xl font-bold line-clamp-1 mb-1">{currentSong.title}</h2>
-              <p className="text-gray-400 text-sm">{currentSong.artist || 'YouTube Music'}</p>
-            </div>
-            <button 
-                onClick={() => setShowVideo(!showVideo)}
-                className={`p-2 rounded-full transition-colors ${!showVideo ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'}`}
-                title={showVideo ? "切換至純音樂模式" : "顯示影片"}
-            >
-              {showVideo ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-            </button>
-          </div>
-
-          <div className="flex items-center justify-center gap-6 sm:gap-10">
-            <button onClick={handleShuffleJump} className="text-gray-400 hover:text-white transition-colors p-2"><Shuffle className="w-5 h-5" /></button>
-            <button onClick={handlePrev} className="text-white hover:text-red-500 transition-colors p-2"><SkipBack className="w-8 h-8" /></button>
-            <button onClick={togglePlay} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-white/10">
-              {isPlaying ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
-            </button>
-            <button onClick={handleNext} className="text-white hover:text-red-500 transition-colors p-2"><SkipForward className="w-8 h-8" /></button>
-            <button className="text-gray-400 hover:text-white transition-colors p-2"><Repeat className="w-5 h-5" /></button>
-          </div>
-
-          <div className="flex items-center gap-4 text-gray-400 max-w-sm mx-auto">
-            <button onClick={() => setIsMuted(!isMuted)}>
-              {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            </button>
+      {/* 控制列 */}
+      <div className="bg-white rounded-lg shadow p-5 border-t-4 border-red-600 space-y-4">
+         {/* 時間與進度條 */}
+         <div className="flex items-center space-x-3 text-xs text-gray-500 font-mono">
+            <span>{formatDuration(currentTime)}</span>
             <input 
-              type="range" min="0" max="100" 
-              value={isMuted ? 0 : volume} 
-              onChange={(e) => { setVolume(parseInt(e.target.value)); setIsMuted(false); }}
-              className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-600"
+              type="range" 
+              min="0" 
+              max={duration || 100} 
+              value={currentTime} 
+              onChange={handleSeek}
+              className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600"
             />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+            <span>{formatDuration(duration)}</span>
+         </div>
 
-// ============================================================================
-// 元件：AdminPanel
-// ============================================================================
-const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport, setView }) => {
-  const [useBig5, setUseBig5] = useState(false);
-
-  const onFileChange = (e) => {
-    handleImport(e, useBig5);
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Settings className="w-5 h-5 text-gray-500" />
-          歌曲管理 ({items.length})
-        </h2>
-        
-        <div className="flex flex-col sm:flex-row items-end gap-3 w-full sm:w-auto">
-           {/* 編碼選擇，解決亂碼問題 */}
-           <label className="flex items-center gap-2 text-sm text-gray-600 bg-white px-2 py-1 rounded border">
-             <input 
-               type="checkbox" 
-               checked={useBig5} 
-               onChange={(e) => setUseBig5(e.target.checked)} 
-               className="rounded text-red-600 focus:ring-red-500"
-             />
-             解決中文亂碼 (Big5)
-           </label>
-
-           <div className="flex gap-2">
-            <label className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors text-sm font-medium">
-              <Upload className="w-4 h-4" />
-              匯入 CSV
-              <input 
-                type="file" 
-                accept=".csv" 
-                onChange={onFileChange} 
-                className="hidden" 
-                key={useBig5 ? 'big5' : 'utf8'} // Force re-render input to clear selection
-              />
-            </label>
-            <button 
-              onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-            >
-              <Download className="w-4 h-4" />
-              匯出 CSV
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider">
-            <tr>
-              <th className="px-6 py-3 font-medium">標題</th>
-              <th className="px-6 py-3 font-medium hidden sm:table-cell">演出者</th>
-              <th className="px-6 py-3 font-medium hidden md:table-cell">ID</th>
-              <th className="px-6 py-3 font-medium text-right">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {items.map(item => (
-              <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      src={`https://img.youtube.com/vi/${item.youtubeId}/default.jpg`} 
-                      className="w-10 h-10 rounded object-cover bg-gray-200"
-                      alt=""
+         <div className="flex items-center justify-between flex-wrap gap-4">
+             {/* 左側：播放控制 */}
+             <div className="flex items-center space-x-4">
+                <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg flex-shrink-0">
+                  {isPlaying ? <Pause size={24} fill="currentColor"/> : <Play size={24} fill="currentColor" className="ml-1"/>}
+                </button>
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500 font-bold uppercase">Now Playing</div>
+                  <div className="font-medium text-gray-900 truncate max-w-[150px] sm:max-w-[200px]">{curTitle}</div>
+                </div>
+             </div>
+             
+             {/* 右側：功能按鈕 */}
+             <div className="flex items-center space-x-2 sm:space-x-4">
+               {/* 1. 音量控制滑桿 */}
+               <div className="flex items-center group relative">
+                  <button onClick={toggleMute} className="p-2 text-gray-400 hover:text-gray-700">
+                    {volume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
+                  </button>
+                  <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300 flex items-center">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={volume} 
+                      onChange={handleVolumeChange}
+                      className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-gray-600 ml-1"
                     />
-                    <span className="font-medium text-gray-900 line-clamp-1">{item.title}</span>
                   </div>
-                </td>
-                <td className="px-6 py-4 text-gray-500 hidden sm:table-cell">{item.artist}</td>
-                <td className="px-6 py-4 text-gray-400 text-xs font-mono hidden md:table-cell">{item.youtubeId}</td>
-                <td className="px-6 py-4 text-right">
-                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEdit(item)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(item.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+               </div>
+
+               {item.type === 'playlist' && (
+                 <>
+                   <div className="w-px h-6 bg-gray-200 mx-2"></div>
+                   <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full transition ${shuffle?'bg-indigo-100 text-indigo-600':'text-gray-400 hover:bg-gray-100'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={20}/></button>
+                   <button onClick={prev} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipBack size={20}/></button>
+                   <button onClick={next} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><SkipForward size={20}/></button>
+                 </>
+               )}
+             </div>
+         </div>
+      </div>
+
+      {/* 詳細資訊與清單 */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-start">
+          <div><h1 className="text-2xl font-bold mb-2">{item.title}</h1><p className="text-gray-600 whitespace-pre-wrap">{item.description}</p></div>
+          <button onClick={openLink} className="flex-shrink-0 ml-4 px-4 py-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center"><ExternalLink size={18} className="mr-2"/> 原始連結</button>
+        </div>
+        
+        {item.type === 'playlist' && (
+          <div className="mt-6 border-t pt-4">
+            <h3 className="font-bold flex mb-4 text-gray-700"><List size={18} className="mr-2"/> 播放清單 ({vList.length})</h3>
+            <div className="max-h-60 overflow-y-auto border rounded-md">
+              {vList.map((v, i) => (
+                <div key={i} onClick={()=>setIdx(i)} className={`p-3 cursor-pointer flex items-center border-b last:border-0 ${i===idx?'bg-red-50 text-red-700 font-medium':'hover:bg-gray-50 text-gray-600'}`}>
+                    <span className="w-8 text-center mr-2 text-xs text-gray-400">{i===idx?<Play size={12} className="mx-auto text-red-600"/>:i+1}</span>
+                    <span className="truncate flex-1">{getVideoTitle(v)}</span>
+                    {/* 顯示隨機播放的順序 (Debug用，也可隱藏) */}
+                    {shuffle && <span className="text-[10px] text-gray-300 ml-2">#{shuffledIndices.indexOf(i) + 1}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="mt-4 text-xs text-gray-400 flex space-x-4"><span>累積訪問: {item.visits || 0}</span><span>累積下載: {item.downloads || 0}</span></div>
       </div>
     </div>
   );
 };
 
-// ============================================================================
-// 元件：LoginView & EditPage
-// ============================================================================
-const LoginView = ({ onLogin }) => (
-  <div className="min-h-[60vh] flex flex-col items-center justify-center p-4">
-    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
-       <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-         <Music className="w-8 h-8 text-red-600" />
+const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport }) => (
+  <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-blue-50 p-4 border-b border-blue-100 flex justify-between">
+       <div className="flex gap-4 text-xs font-bold text-blue-800 items-center">
+         <span className="flex items-center text-green-600"><Cloud size={12} className="mr-1"/> 雲端模式</span>
+         <span className="flex items-center text-green-600"><CheckCircle size={12} className="mr-1"/> 連線正常</span>
+         <span className="text-gray-400 font-mono">ID: yt-manager-global</span>
        </div>
-       <h2 className="text-2xl font-bold mb-2">歡迎回來</h2>
-       <p className="text-gray-500 mb-8">請登入以管理您的音樂庫</p>
-       <button onClick={onLogin} className="w-full py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 shadow-lg flex items-center justify-center gap-2">
-         <LogOut className="w-5 h-5" /> 匿名登入
-       </button>
     </div>
+    <div className="p-6 border-b flex justify-between"><h2 className="text-xl font-bold flex items-center"><List className="mr-2"/> 管理</h2><div className="flex gap-2"><label className="cursor-pointer px-4 py-2 border rounded hover:bg-gray-50 flex items-center"><Upload size={16} className="mr-2"/> 匯入<input type="file" className="hidden" accept=".csv" onChange={handleImport}/></label><button onClick={handleExport} className="px-4 py-2 border rounded hover:bg-gray-50 flex items-center"><Download size={16} className="mr-2"/> 匯出</button></div></div>
+    <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">標題</th><th className="px-6 py-3 text-left">類型</th><th className="px-6 py-3 text-left">數據</th><th className="px-6 py-3 text-right">操作</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{items.map(i=>(<tr key={i.id}><td className="px-6 py-4"><div className="text-sm font-medium">{i.title}</div></td><td className="px-6 py-4"><span className={`px-2 text-xs rounded-full ${i.type==='playlist'?'bg-indigo-100 text-indigo-800':'bg-green-100 text-green-800'}`}>{i.type==='playlist'?'清單':'單曲'}</span></td><td className="px-6 py-4 text-sm text-gray-500">{i.visits||0}/{i.downloads||0}</td><td className="px-6 py-4 text-right space-x-2"><button onClick={()=>openEdit(i)} className="text-indigo-600"><Edit size={16}/></button><button onClick={()=>handleDelete(i.id)} className="text-red-600"><Trash2 size={16}/></button></td></tr>))}</tbody></table>
   </div>
 );
 
-const EditPage = ({ item, handleUpdate, setView, showNotification }) => {
-    const [formData, setFormData] = useState({...item});
-    const onSubmit = () => {
-        handleUpdate(item.id, formData);
-        showNotification('更新成功', 'success');
-        setView('admin');
-    };
-    return (
-        <div className="max-w-xl mx-auto bg-white p-6 rounded-xl shadow-sm">
-            <h2 className="text-xl font-bold mb-4">編輯歌曲</h2>
-            <div className="space-y-4">
-                <input className="w-full p-2 border rounded" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="標題"/>
-                <input className="w-full p-2 border rounded" value={formData.artist} onChange={e => setFormData({...formData, artist: e.target.value})} placeholder="演出者"/>
-                <input className="w-full p-2 border rounded text-gray-500" value={formData.youtubeId} disabled placeholder="ID (不可編輯)"/>
-                <div className="flex gap-2 pt-4">
-                    <button onClick={() => setView('admin')} className="flex-1 py-2 bg-gray-100 rounded">取消</button>
-                    <button onClick={onSubmit} className="flex-1 py-2 bg-blue-600 text-white rounded">儲存</button>
-                </div>
-            </div>
-        </div>
-    );
+const LoginView = ({ onLogin, setView }) => {
+  const [p, setP] = useState('');
+  return <div className="flex justify-center py-12"><div className="max-w-md w-full bg-white p-8 rounded shadow"><h2>管理員登入</h2><form className="mt-4" onSubmit={e=>{e.preventDefault();onLogin(p)}}><input type="password" required className="w-full p-2 border rounded mb-4" placeholder="密碼" value={p} onChange={e=>setP(e.target.value)}/><button type="submit" className="w-full py-2 bg-red-600 text-white rounded">登入</button><button type="button" onClick={()=>setView('home')} className="w-full py-2 mt-2 text-gray-500">返回</button></form></div></div>;
 };
 
-// ============================================================================
-// 主應用程式 App
-// ============================================================================
+// --- App ---
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [view, setView] = useState('home');
   const [items, setItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [view, setView] = useState('home');
   const [activeItem, setActiveItem] = useState(null);
   const [editItem, setEditItem] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [notification, setNotification] = useState(null);
-  const [permErr, setPermErr] = useState(null);
-  const [visitCount, setVisitCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [permErr, setPermErr] = useState(false);
+  // 6. 訪客計數 (LocalStorage 模擬)
+  const [visitorCount, setVisitorCount] = useState(0);
 
-  const DB_APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-yt-app';
+  const showNotification = (msg, type='success') => { setNotification({msg, type}); setTimeout(()=>setNotification(null), 3000); };
+
+  const handleCreate = async (item) => {
+    const newItem = { ...item, id: generateId(), createdAt: Date.now(), visits: 0, downloads: 0 };
+    try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', newItem.id), newItem); showNotification('建立成功'); setView('home'); } catch(e) { showNotification('建立失敗: '+e.message, 'error'); }
+  };
+  
+  const handleUpdate = async (item) => {
+    try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), item, {merge:true}); showNotification('更新成功'); setEditItem(null); setView('admin'); } catch(e) { showNotification('更新失敗', 'error'); }
+  };
+  
+  const handleDelete = async (id) => {
+    if(window.confirm('確認刪除?')) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id)); showNotification('已刪除'); } catch(e) { showNotification('刪除失敗', 'error'); } }
+  };
+  
+  const handleImport = (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target.result.startsWith('\uFEFF') ? evt.target.result.slice(1) : evt.target.result;
+      const data = csvToArray(text);
+      if(data.length > 0) {
+        let count = 0;
+        for(const d of data) {
+          const id = d.id || generateId();
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id), {...d, id});
+          count++;
+        }
+        showNotification(`匯入成功 ${count} 筆`);
+      } else showNotification('無效資料', 'error');
+    };
+    reader.readAsText(file);
+  };
+  
+  // 4. CSV 匯出 (檔名日期 + BOM)
+  const handleExport = () => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `musiclist_${dateStr}.csv`;
+    const url = URL.createObjectURL(new Blob(['\uFEFF'+arrayToCSV(items)], {type:'text/csv;charset=utf-8;'}));
+    const link = document.createElement('a'); 
+    link.href = url; 
+    link.download = fileName; 
+    link.click();
+  };
+  
+  const viewItem = async (item) => {
+    setActiveItem(item); setView('view');
+    try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), {visits: (item.visits||0)+1}); } catch(e){}
+  };
+  
+  const recordDownload = async (id) => {
+    const item = items.find(i=>i.id===id);
+    if(item) try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id), {downloads: (item.downloads||0)+1}); } catch(e){}
+  };
+
+  const handleLogin = (p) => { 
+    if (p === '1qaz2wsx') { 
+      setIsAdmin(true); 
+      setView('admin'); 
+      showNotification('管理員登入成功'); 
+    } else {
+      showNotification('密碼錯誤', 'error'); 
+    }
+  };
+  
+  const handleLogout = () => { 
+    setIsAdmin(false); 
+    setView('home'); 
+    showNotification('已登出'); 
+  };
+  
+  const openEdit = (item) => { 
+    setEditItem(item); 
+    setView('edit'); 
+  };
 
   useEffect(() => {
-    const initAuth = async () => {
-       try { await signInAnonymously(auth); } catch(e) { console.error("Auth Error:", e); }
-    };
+    const initAuth = async () => { try { await signInAnonymously(auth); } catch(e) { console.error(e); } };
     initAuth();
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setIsAdmin(!!u);
-      setIsLoading(false);
-      if (u) updateVisitCount();
-    });
-    return () => unsub();
+    // 6. 訪客計數初始化
+    const count = parseInt(localStorage.getItem('yt_visitor_count') || '0') + 1;
+    localStorage.setItem('yt_visitor_count', count);
+    setVisitorCount(count);
+    
+    return onAuthStateChanged(auth, setUser);
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    const q = collection(db, 'artifacts', DB_APP_ID, 'public', 'data', 'songs');
-    const unsub = onSnapshot(q, 
-      (snapshot) => setItems(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (err) => setPermErr("讀取資料失敗 (Rule 1)")
-    );
-    return () => unsub();
+    if (user) {
+      setIsLoading(true); setPermErr(false);
+      return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items'), (snap) => {
+        const d = snap.docs.map(doc => doc.data()).sort((a,b)=>b.createdAt-a.createdAt);
+        setItems(d); setIsLoading(false);
+      }, (err) => { setIsLoading(false); if(err.code==='permission-denied') { setPermErr(true); showNotification('權限不足', 'error'); } });
+    }
   }, [user]);
 
-  const updateVisitCount = async () => {
-    const statsRef = doc(db, 'artifacts', DB_APP_ID, 'public', 'data', 'stats', 'global');
-    try {
-        const snap = await getDoc(statsRef);
-        if (snap.exists()) setVisitCount(snap.data().visits || 0);
-        if (!sessionStorage.getItem('visited')) {
-             snap.exists() ? await updateDoc(statsRef, { visits: increment(1) }) : await setDoc(statsRef, { visits: 1 });
-             setVisitCount(prev => prev + 1);
-             sessionStorage.setItem('visited', 'true');
-        }
-    } catch (e) { console.log(e); }
-  };
-
-  const showNotification = (msg, type = 'success') => {
-    setNotification({ msg, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  const handleCreate = async (data) => {
-    if (!user) return;
-    try {
-      const newRef = doc(collection(db, 'artifacts', DB_APP_ID, 'public', 'data', 'songs'));
-      await setDoc(newRef, { ...data, createdAt: new Date().toISOString(), createdBy: user.uid });
-      showNotification('新增成功');
-    } catch (error) { showNotification('新增失敗', 'error'); }
-  };
-
-  const handleUpdate = async (id, data) => {
-    if (!user) return;
-    try {
-      await updateDoc(doc(db, 'artifacts', DB_APP_ID, 'public', 'data', 'songs', id), data);
-    } catch (error) { showNotification('更新失敗', 'error'); }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('確定要刪除嗎？')) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', DB_APP_ID, 'public', 'data', 'songs', id));
-      showNotification('已刪除');
-    } catch (error) { showNotification('刪除失敗', 'error'); }
-  };
-
-  const handleExport = () => {
-    const headers = ['Title', 'Artist', 'YouTube ID', 'Category'];
-    const csvContent = [
-      headers.join(','),
-      ...items.map(i => `"${i.title}","${i.artist}","${i.youtubeId}","${i.category || ''}"`)
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `musiclist${getTodayDateString()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // 重寫：支援 Big5、支援新舊格式、自動轉換 ID
-  const handleImport = (e, useBig5) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    
-    // 如果使用者勾選 Big5，則用 big5 編碼讀取
-    reader.readAsText(file, useBig5 ? 'big5' : 'utf-8');
-    
-    reader.onload = (evt) => {
-      const text = evt.target.result;
-      const rows = parseCSV(text); // 使用新的 parser
-      
-      if (rows.length < 2) {
-          showNotification('CSV 檔案格式錯誤或為空', 'error');
-          return;
-      }
-
-      const headers = rows[0].map(h => h.toLowerCase().trim());
-      let count = 0;
-
-      // 偵測是否為舊格式 (包含 'url' 欄位)
-      const isOldFormat = headers.includes('url') && headers.includes('title');
-      const isNewFormat = headers.includes('youtube id') || (headers.includes('title') && headers.includes('artist'));
-
-      // 欄位索引 mapping
-      let idxTitle = -1, idxArtist = -1, idxUrl = -1, idxId = -1, idxDesc = -1;
-
-      if (isOldFormat) {
-          idxTitle = headers.indexOf('title');
-          idxUrl = headers.indexOf('url');
-          idxDesc = headers.indexOf('description'); // 舊格式通常把資訊放在 description
-      } else if (isNewFormat) {
-          idxTitle = headers.indexOf('title');
-          idxArtist = headers.indexOf('artist');
-          idxId = headers.findIndex(h => h.includes('id') && h.includes('youtube'));
-      }
-
-      rows.slice(1).forEach(cols => {
-        if (cols.length < 2) return;
-
-        let title = '', artist = '', youtubeId = '';
-
-        if (isOldFormat) {
-            title = cols[idxTitle] || 'Unknown Title';
-            const urlVal = cols[idxUrl] || '';
-            // 自動從 URL 轉 ID
-            youtubeId = getYouTubeId(urlVal);
-            // 舊格式 artist 常常混在 description，若無 description 則用 title 的一部分或 Unknown
-            artist = cols[idxDesc] || 'Unknown Artist';
-        } else {
-            title = cols[idxTitle];
-            artist = cols[idxArtist] || 'Unknown';
-            youtubeId = cols[idxId];
-            // 若新格式欄位是 URL，也嘗試轉換
-            if (youtubeId && youtubeId.includes('http')) {
-                youtubeId = getYouTubeId(youtubeId);
-            }
-        }
-
-        if (title && youtubeId) {
-          handleCreate({
-             title: title.replace(/^"|"$/g, '').trim(), // 去除可能殘留的引號
-             artist: artist.replace(/^"|"$/g, '').trim(),
-             youtubeId: youtubeId,
-             category: 'Imported'
-          });
-          count++;
-        }
-      });
-      
-      if (count > 0) {
-          showNotification(`已排程匯入 ${count} 首歌 (若文字仍是亂碼，請勾選 Big5 重試)`);
-      } else {
-          showNotification(`匯入失敗：找不到有效歌曲，請確認 CSV 格式`, 'error');
-      }
-    };
-  };
-
-  const handleLogin = async () => { try { await signInAnonymously(auth); } catch (e) { showNotification('登入失敗', 'error'); } };
-  const handleLogout = () => { signOut(auth); setView('login'); };
-  const startPlayer = (clickedItem) => { setActiveItem(clickedItem); setView('view'); };
-
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading} view={view} />
-      {notification && (
-        <div className={`fixed top-20 right-4 p-4 rounded-xl shadow-lg text-white z-50 flex items-center gap-2 animate-bounce-in ${notification.type==='error'?'bg-red-500':'bg-green-500'}`}>
-           {notification.type === 'success' ? <CheckCircle className="w-5 h-5"/> : <ShieldAlert className="w-5 h-5"/>}
-           {notification.msg}
-        </div>
-      )}
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6">
-        {view === 'home' && <Dashboard items={items} viewItem={startPlayer} isLoading={isLoading} permissionError={permErr} visitCount={visitCount} />}
-        {view === 'create' && <CreatePage items={items} handleCreate={handleCreate} setView={setView} showNotification={showNotification} />}
-        {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification} />}
-        {view === 'view' && activeItem && <PlayerView activeItem={activeItem} allItems={items} setView={setView} />}
-        {view === 'login' && <LoginView onLogin={handleLogin} />}
-        {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={(item) => { setEditItem(item); setView('edit'); }} handleImport={handleImport} handleExport={handleExport} setView={setView} />}
+    <div className="min-h-screen bg-gray-100 text-gray-900">
+      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading}/>
+      {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow text-white z-50 ${notification.type==='error'?'bg-red-500':'bg-green-500'}`}>{notification.msg}</div>}
+      <main className="max-w-7xl mx-auto py-6 px-4">
+        {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr}/>}
+        {view === 'create' && <CreatePage items={items} handleCreate={handleCreate} setView={setView} showNotification={showNotification}/>}
+        {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification}/>}
+        {view === 'view' && activeItem && <PlayerView item={activeItem} setView={setView} recordDownload={recordDownload}/>}
+        {view === 'login' && <LoginView onLogin={handleLogin} setView={setView}/>}
+        {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={openEdit} handleImport={handleImport} handleExport={handleExport}/>}
       </main>
+      
+      {/* 底部狀態列 (包含訪客計數) */}
+      <div className="fixed bottom-4 left-4 z-50 flex gap-2">
+         <div className="px-3 py-1 bg-white shadow rounded-full text-xs flex items-center text-gray-600 border border-gray-200">
+           <Cloud size={12} className="mr-1 text-blue-500"/> 雲端模式
+         </div>
+         <div className="px-3 py-1 bg-white shadow rounded-full text-xs flex items-center text-gray-600 border border-gray-200">
+           <User size={12} className="mr-1 text-purple-500"/> 訪客數: {visitorCount}
+         </div>
+      </div>
     </div>
   );
 }
