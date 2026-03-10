@@ -221,9 +221,9 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
   </nav>
 );
 
-const Dashboard = ({ items, viewItem, isLoading, permissionError }) => {
+const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, toggleFavorite }) => {
   const [filter, setFilter] = useState('all'); 
-  const [searchTerm, setSearchTerm] = useState(''); // 搜尋關鍵字狀態
+  const [searchTerm, setSearchTerm] = useState('');
 
   const safeItems = items || [];
   const stats = {
@@ -325,26 +325,38 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError }) => {
           <div className="p-12 text-center text-gray-500 dark:text-gray-400">{renderEmptyState()}</div>
         ) : (
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredItems.map(item => (
+            {filteredItems.map(item => {
+              const thumb = getYouTubeThumbnail(item.type === 'playlist' ? (item.urls && item.urls[0] ? item.urls[0].url || item.urls[0] : '') : item.url);
+              return (
               <li key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition duration-150">
                 <div className="px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center flex-1 cursor-pointer" onClick={() => viewItem(item)}>
-                    <div className={`p-2 rounded-full mr-4 ${item.type === 'playlist' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
-                      {item.type === 'playlist' ? <List size={20} /> : <Youtube size={20} />}
-                    </div>
+                    {thumb ? (
+                      <div className="relative mr-4 flex-shrink-0">
+                        <img src={thumb} alt={item.title} className="w-24 h-14 object-cover rounded-lg" onError={(e) => { e.target.style.display = 'none'; }} />
+                        <div className="absolute inset-0 flex items-center justify-center"><PlayCircle size={24} className="text-white opacity-80" /></div>
+                      </div>
+                    ) : (
+                      <div className={`p-2 rounded-full mr-4 ${item.type === 'playlist' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
+                        {item.type === 'playlist' ? <List size={20} /> : <Youtube size={20} />}
+                      </div>
+                    )}
                     <div>
                       <div className="text-sm font-medium text-gray-900 dark:text-white">{item.title}</div>
                       <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md">{item.description}</div>
                     </div>
                   </div>
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 space-x-6">
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 space-x-4">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${favorites.includes(item.id) ? 'text-red-500' : 'text-gray-400'}`}>
+                      <Heart size={18} fill={favorites.includes(item.id) ? "currentColor" : "none"} />
+                    </button>
                     <span className="flex items-center" title="訪問次數"><Eye size={14} className="mr-1"/> {item.visits || 0}</span>
                     <span className="flex items-center" title="下載次數"><Download size={14} className="mr-1"/> {item.downloads || 0}</span>
                     <span className="hidden sm:inline">{formatDate(item.createdAt)}</span>
                   </div>
                 </div>
               </li>
-            ))}
+            );})}
           </ul>
         )}
       </div>
@@ -1027,7 +1039,7 @@ export default function App() {
       <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading} isDarkMode={isDarkMode} toggleTheme={toggleTheme}/>
       {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow text-white z-50 ${notification.type==='error'?'bg-red-500':'bg-green-500'}`}>{notification.msg}</div>}
       <main className="max-w-7xl mx-auto py-6 px-4">
-        {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr}/>}
+        {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr} favorites={favorites} toggleFavorite={toggleFavorite}/>}
         {view === 'create' && <CreatePage items={items} handleCreate={handleCreate} setView={setView} showNotification={showNotification}/>}
         {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification}/>}
         {view === 'view' && activeItem && <PlayerView item={activeItem} setView={setView} recordDownload={recordDownload}/>}
