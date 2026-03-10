@@ -43,12 +43,12 @@ import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc
 // Firebase 設定
 // ============================================================================
 const YOUR_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
-  authDomain: "yt-manager-995a5.firebaseapp.com",
-  projectId: "yt-manager-995a5",
-  storageBucket: "yt-manager-995a5.firebasestorage.app",
-  messagingSenderId: "188108532520",
-  appId: "1:188108532520:web:76f89808fa5e919bc1be1d"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "yt-manager-995a5.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "yt-manager-995a5",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "yt-manager-995a5.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "188108532520",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:188108532520:web:76f89808fa5e919bc1be1d"
 };
 
 // Initialize Firebase
@@ -85,7 +85,7 @@ try {
 }
 
 // --- 工具函數 ---
-const generateId = () => Math.random().toString(36).substr(2, 9);
+const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9);
 const getYouTubeID = (url) => {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
