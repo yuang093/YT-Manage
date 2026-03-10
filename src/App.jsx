@@ -32,8 +32,10 @@ import {
   VolumeX,
   User,
   Search, // 新增 Search 圖示
-  Sun,    // 新增 Sun 圖示
-  Moon    // 新增 Moon 圖示
+  Moon,
+  Heart,
+  Clock,
+  PlayCircle
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
@@ -92,6 +94,12 @@ const getYouTubeID = (url) => {
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
 };
+
+const getYouTubeThumbnail = (url) => {
+  const videoId = getYouTubeID(url);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
+};
+
 const formatDate = (timestamp) => {
   if (!timestamp) return '';
   try {
@@ -871,6 +879,27 @@ export default function App() {
   const [permErr, setPermErr] = useState(false);
   // 6. 訪客計數 (LocalStorage 模擬)
   const [visitorCount, setVisitorCount] = useState(0);
+  
+  // 收藏功能
+  const [favorites, setFavorites] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return JSON.parse(localStorage.getItem('yt_favorites') || '[]');
+    }
+    return [];
+  });
+  
+  // 切換收藏
+  const toggleFavorite = (itemId) => {
+    let newFavorites;
+    if (favorites.includes(itemId)) {
+      newFavorites = favorites.filter(id => id !== itemId);
+    } else {
+      newFavorites = [...favorites, itemId];
+    }
+    setFavorites(newFavorites);
+    localStorage.setItem('yt_favorites', JSON.stringify(newFavorites));
+  };
+  
   // 深色模式狀態
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
