@@ -33,6 +33,7 @@ import {
   User,
   Search, // 新增 Search 圖示
   Moon,
+  Sun,
   Heart,
   Clock,
   PlayCircle
@@ -45,12 +46,12 @@ import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc
 // Firebase 設定
 // ============================================================================
 const YOUR_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
-  authDomain: "yt-manager-995a5.firebaseapp.com",
-  projectId: "yt-manager-995a5",
-  storageBucket: "yt-manager-995a5.firebasestorage.app",
-  messagingSenderId: "188108532520",
-  appId: "1:188108532520:web:76f89808fa5e919bc1be1d"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAf9E7Q5re8A09k-N7moPC_pkjqvVWOBbg",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "yt-manager-995a5.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "yt-manager-995a5",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "yt-manager-995a5.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "188108532520",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:188108532520:web:76f89808fa5e919bc1be1d"
 };
 
 // Initialize Firebase
@@ -87,7 +88,7 @@ try {
 }
 
 // --- 工具函數 ---
-const generateId = () => Math.random().toString(36).substr(2, 9);
+const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9);
 const getYouTubeID = (url) => {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -239,7 +240,11 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
     // 類型篩選
     const matchesFilter = filter === 'all' || item.type === filter;
     
-    // 搜尋過濾 (標題或說明)
+    // 搜尋過濾 - 優化：無搜尋詞時跳過比對
+    if (!searchTerm) {
+      return matchesFilter;
+    }
+    
     const lowerSearch = searchTerm.toLowerCase();
     const matchesSearch = item.title?.toLowerCase().includes(lowerSearch) || 
                           item.description?.toLowerCase().includes(lowerSearch);
@@ -1014,14 +1019,24 @@ export default function App() {
   };
 
   useEffect(() => {
-    const initAuth = async () => { try { await signInAnonymously(auth); } catch(e) { console.error(e); } };
-    initAuth();
+    // 初始化 Firebase Auth
+    const initAuth = async () => { 
+      try { 
+        if (auth) {
+          await signInAnonymously(auth); 
+        }
+      } catch(e) { 
+        console.error(e); 
+      } 
+    };
+    if (auth) initAuth();
+    
     // 6. 訪客計數初始化
     const count = parseInt(localStorage.getItem('yt_visitor_count') || '0') + 1;
     localStorage.setItem('yt_visitor_count', count);
     setVisitorCount(count);
     
-    return onAuthStateChanged(auth, setUser);
+    return auth ? onAuthStateChanged(auth, setUser) : () => {};
   }, []);
 
   useEffect(() => {
@@ -1053,7 +1068,7 @@ export default function App() {
            <Cloud size={12} className="mr-1 text-blue-500 dark:text-blue-400"/> 雲端模式
          </div>
          <div className="px-3 py-1 bg-white dark:bg-gray-800 shadow rounded-full text-xs flex items-center text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-           <User size={12} className="mr-1 text-purple-500 dark:text-purple-400"/> 訪客數: {visitorCount}
+           <User size={12} className="mr-1 text-purple-500 dark:text-purple-400"/> 您的造訪次數: {visitorCount}
          </div>
       </div>
     </div>
