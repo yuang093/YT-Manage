@@ -36,8 +36,23 @@ import {
   Moon,   // 新增 Moon 圖示
   Heart,
   Clock,
-  PlayCircle
+  PlayCircle,
+  Zap,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
+
+// --- 全局動畫樣式 ---
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; }
+`;
+if (typeof document !== 'undefined') document.head.appendChild(style);
+
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -182,11 +197,14 @@ const csvToArray = (csvText) => {
 
 // --- UI ---
 const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleTheme }) => (
-  <nav className="bg-red-600 dark:bg-red-900 text-white shadow-md transition-colors duration-300">
+  <nav className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 dark:from-red-900 dark:via-red-800 dark:to-red-900 text-white shadow-lg transition-all duration-300">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between h-16">
         <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
-          <Youtube className="w-8 h-8 mr-2" />
+          <div className="relative">
+            <Youtube className="w-8 h-8 mr-2" />
+            <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
+          </div>
           <span className="font-bold text-xl tracking-tight">YT 管理大師</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
@@ -258,7 +276,7 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
         </div>
       );
     }
-    if (isLoading) return <div className="flex items-center justify-center text-gray-500 dark:text-gray-400"><Loader2 className="w-5 h-5 mr-2 animate-spin"/> 正在連線至雲端資料庫...</div>;
+    if (isLoading) return <div className="flex items-center justify-center text-gray-500 dark:text-gray-400 p-8"><div className="animate-pulse flex flex-col items-center"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-2"></div><div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-48"></div></div></div>;
     if (safeItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">目前雲端資料庫是空的，請點擊右上角「新增頁面」開始建立。</div>;
     if (filteredItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">找不到符合「{searchTerm}」的資料。</div>;
     return <div className="text-gray-500 dark:text-gray-400">此分類目前沒有資料。</div>;
@@ -266,48 +284,56 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
 
   return (
     <div className="space-y-6">
-      {/* 統計卡片 */}
+      {/* 統計卡片 - 增強樣式 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-blue-500 dark:border-blue-600 transition-colors">
-          <div className="text-gray-500 dark:text-gray-400 text-sm">總項目數</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalItems}</div>
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border-l-4 border-blue-500 group">
+          <div className="flex items-center justify-between">
+            <div><div className="text-gray-500 dark:text-gray-400 text-sm">總項目數</div><div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">{stats.totalItems}</div></div>
+            <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/30"><List className="w-6 h-6 text-blue-500" /></div>
+          </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-green-500 dark:border-green-600 transition-colors">
-          <div className="text-gray-500 dark:text-gray-400 text-sm">總訪問次數</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalVisits}</div>
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border-l-4 border-green-500 group">
+          <div className="flex items-center justify-between">
+            <div><div className="text-gray-500 dark:text-gray-400 text-sm">總訪問次數</div><div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">{stats.totalVisits}</div></div>
+            <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/30"><Eye className="w-6 h-6 text-green-500" /></div>
+          </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-purple-500 dark:border-purple-600 transition-colors">
-          <div className="text-gray-500 dark:text-gray-400 text-sm">總下載/點擊</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalDownloads}</div>
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border-l-4 border-purple-500 group">
+          <div className="flex items-center justify-between">
+            <div><div className="text-gray-500 dark:text-gray-400 text-sm">總下載/點擊</div><div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">{stats.totalDownloads}</div></div>
+            <div className="p-3 rounded-full bg-purple-100 dark:bg-purple-900/30"><Download className="w-6 h-6 text-purple-500" /></div>
+          </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-yellow-500 dark:border-yellow-600 transition-colors">
-          <div className="text-gray-500 dark:text-gray-400 text-sm">清單 / 單曲</div>
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.playlists} / {stats.singles}</div>
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border-l-4 border-yellow-500 group">
+          <div className="flex items-center justify-between">
+            <div><div className="text-gray-500 dark:text-gray-400 text-sm">清單 / 單曲</div><div className="text-2xl font-bold text-gray-900 dark:text-white group-hover:scale-105 transition-transform">{stats.playlists} / {stats.singles}</div></div>
+            <div className="p-3 rounded-full bg-yellow-100 dark:bg-yellow-900/30"><PlayCircle className="w-6 h-6 text-yellow-500" /></div>
+          </div>
         </div>
       </div>
       
-      {/* 搜尋與過濾區 */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden transition-colors">
+      {/* 搜尋與過濾區 - 增強陰影 */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-4">
           
-          {/* 分類按鈕 */}
-          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+          {/* 分類按鈕 - 玻璃效果 */}
+          <div className="flex space-x-1 bg-gray-100/50 dark:bg-gray-700/50 backdrop-blur-sm p-1 rounded-xl">
              {['all', 'single', 'playlist'].map(type => (
-               <button key={type} onClick={() => setFilter(type)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filter === type ? 'bg-white dark:bg-gray-600 text-red-600 dark:text-red-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}>
-                 {type === 'all' ? '全部' : type === 'single' ? '單曲' : '播放清單'}
+               <button key={type} onClick={() => setFilter(type)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${filter === type ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md transform scale-105' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-600/50'}`}>
+                 {type === 'all' ? '🎵 全部' : type === 'single' ? '🎤 單曲' : '📋 播放清單'}
                </button>
              ))}
           </div>
 
-          {/* 搜尋框 */}
-          <div className="relative w-full md:w-64">
+          {/* 搜尋框 - Glow 效果 */}
+          <div className="relative w-full md:w-72">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={16} className="text-gray-400 dark:text-gray-500" />
+              <Search size={16} className="text-gray-400" />
             </div>
             <input
               type="text"
               placeholder="搜尋標題或說明..."
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 sm:text-sm transition-colors"
+              className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent focus:shadow-lg focus:shadow-red-500/20 transition-all duration-200"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -325,35 +351,36 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
         {filteredItems.length === 0 ? (
           <div className="p-12 text-center text-gray-500 dark:text-gray-400">{renderEmptyState()}</div>
         ) : (
-          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-            {filteredItems.map(item => {
+          <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+            {filteredItems.map((item, index) => {
               const thumb = getYouTubeThumbnail(item.type === 'playlist' ? (item.urls && item.urls[0] ? item.urls[0].url || item.urls[0] : '') : item.url);
+              const isFav = favorites.includes(item.id);
               return (
-              <li key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition duration-150">
+              <li key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-200 hover:shadow-md group" style={{ animation: `fadeInUp 0.3s ease-out forwards`, animationDelay: `${index * 50}ms`, opacity: 0 }}>
                 <div className="px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center flex-1 cursor-pointer" onClick={() => viewItem(item)}>
                     {thumb ? (
-                      <div className="relative mr-4 flex-shrink-0">
-                        <img src={thumb} alt={item.title} className="w-24 h-14 object-cover rounded-lg" onError={(e) => { e.target.style.display = 'none'; }} />
-                        <div className="absolute inset-0 flex items-center justify-center"><PlayCircle size={24} className="text-white opacity-80" /></div>
+                      <div className="relative mr-4 flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                        <img src={thumb} alt={item.title} className="w-28 h-16 object-cover rounded-xl shadow-md group-hover:shadow-xl transition-all duration-200" onError={(e) => { e.target.style.display = 'none'; }} />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30 rounded-xl"><PlayCircle size={28} className="text-white drop-shadow-lg" /></div>
+                        {item.type === 'playlist' && <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">{item.urls?.length || 0}</div>}
                       </div>
                     ) : (
-                      <div className={`p-2 rounded-full mr-4 ${item.type === 'playlist' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
-                        {item.type === 'playlist' ? <List size={20} /> : <Youtube size={20} />}
+                      <div className={`p-3 rounded-xl mr-4 ${item.type === 'playlist' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'} group-hover:scale-110 transition-transform duration-200`}>
+                        {item.type === 'playlist' ? <List size={22} /> : <Youtube size={22} />}
                       </div>
                     )}
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{item.title}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors truncate">{item.title}</div>
                       <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md">{item.description}</div>
                     </div>
                   </div>
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 space-x-4">
-                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${favorites.includes(item.id) ? 'text-red-500' : 'text-gray-400'}`}>
-                      <Heart size={18} fill={favorites.includes(item.id) ? "currentColor" : "none"} />
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 space-x-4 ml-4">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className={`p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 ${isFav ? 'text-red-500 scale-110' : 'text-gray-400 hover:text-red-500'}`}>
+                      <Heart size={20} fill={isFav ? "currentColor" : "none"} className={isFav ? "animate-pulse" : ""} />
                     </button>
-                    <span className="flex items-center" title="訪問次數"><Eye size={14} className="mr-1"/> {item.visits || 0}</span>
-                    <span className="flex items-center" title="下載次數"><Download size={14} className="mr-1"/> {item.downloads || 0}</span>
-                    <span className="hidden sm:inline">{formatDate(item.createdAt)}</span>
+                    <div className="flex flex-col items-end"><span className="flex items-center text-xs"><Eye size={12} className="mr-1"/> {item.visits || 0}</span><span className="flex items-center text-xs"><Download size={12} className="mr-1"/> {item.downloads || 0}</span></div>
+                    <span className="hidden md:inline text-xs opacity-60">{formatDate(item.createdAt)}</span>
                   </div>
                 </div>
               </li>
@@ -407,7 +434,7 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+    <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 transition-all duration-300">
       <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white">建立新頁面</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -513,7 +540,7 @@ const EditPage = ({ item, items, handleUpdate, setView, showNotification }) => {
     }
   };
   return (
-    <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+    <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 transition-all duration-300">
       <h2 className="text-2xl font-bold mb-6 flex items-center text-gray-800 dark:text-white"><Edit className="mr-2" /> 修改</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
          <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">主旨</label><input required type="text" className="mt-1 block w-full border p-2 rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={title} onChange={e => setTitle(e.target.value)} /></div>
@@ -833,7 +860,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       </div>
 
       {/* 詳細資訊與清單 */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 transition-all duration-300">
         <div className="flex justify-between items-start">
           <div><h1 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">{item.title}</h1><p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{item.description}</p></div>
           <button onClick={openLink} className="flex-shrink-0 ml-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center"><ExternalLink size={18} className="mr-2"/> 原始連結</button>
