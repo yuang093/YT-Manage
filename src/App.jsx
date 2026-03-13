@@ -212,7 +212,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V8</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V9</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -809,10 +809,38 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   }, [volume]);
 
-  // 新功能：定時關閉計時器
+  // 新功能：定時關閉計時器 + 逐步調低音量
+  const [volumeFadeInterval, setVolumeFadeInterval] = useState(null);
   useEffect(() => {
     if (sleepTimer > 0) {
+      // 逐步調低音量：每分鐘降低 10%
+      const fadeSteps = Math.ceil(sleepTimer / 2); // 每2分鐘降一次
+      let remainingMinutes = sleepTimer;
+      
       sleepTimerRef.current = setTimeout(() => {
+        // 開始逐步調低音量
+        const fadeInterval = setInterval(() => {
+          setVolume(prev => {
+            const newVol = Math.max(0, prev - 15);
+            if (playerRef.current && playerRef.current.setVolume) {
+              playerRef.current.setVolume(newVol);
+            }
+            if (newVol === 0) {
+              clearInterval(fadeInterval);
+              // 音量歸零後暫停
+              if (playerRef.current && playerRef.current.pauseVideo) {
+                playerRef.current.pauseVideo();
+                setIsPlaying(false);
+              }
+              setSleepTimer(0);
+            }
+            return newVol;
+          });
+        }, 120000); // 每2分鐘降低一次音量 (sleepTimer 分鐘內完成)
+        
+        setVolumeFadeInterval(fadeInterval);
+        
+        // 最終暫停
         if (playerRef.current && playerRef.current.pauseVideo) {
           playerRef.current.pauseVideo();
           setIsPlaying(false);
@@ -824,6 +852,9 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     return () => {
       if (sleepTimerRef.current) {
         clearTimeout(sleepTimerRef.current);
+      }
+      if (volumeFadeInterval) {
+        clearInterval(volumeFadeInterval);
       }
     };
   }, [sleepTimer]);
@@ -933,6 +964,69 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       setIsMuted(true);
     }
   };
+
+  // V9 新功能：鍵盤快捷鍵
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // 忽略輸入框中的鍵盤事件
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      switch(e.key) {
+        case ' ':
+        case 'k':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          next();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          prev();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setVolume(v => Math.min(100, v + 10));
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          setVolume(v => Math.max(0, v - 10));
+          break;
+        case 'm':
+        case 'M':
+          e.preventDefault();
+          toggleMute();
+          break;
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          setLoopMode(m => {
+            if (m === 'none') return 'all';
+            if (m === 'all') return 'one';
+            return 'none';
+          });
+          break;
+        case 's':
+        case 'S':
+          // 切換隨機播放 (不重洗當前佇列)
+          e.preventDefault();
+          setShuffle(s => !s);
+          break;
+        case 'f':
+        case 'F':
+          // 切換純音樂模式
+          e.preventDefault();
+          setAudio(a => !a);
+          break;
+        default:
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []); // 空依賴陣列，確保只註冊一次
 
   // 循環模式 + 隨機播放邏輯
   const next = () => {
