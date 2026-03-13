@@ -31,15 +31,22 @@ import {
   Volume2,
   VolumeX,
   User,
-  Search, // 新增 Search 圖示
-  Sun,    // 新增 Sun 圖示
-  Moon,   // 新增 Moon 圖示
+  Search,
+  Sun,
+  Moon,
   Heart,
   Clock,
   PlayCircle,
   Zap,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Repeat,
+  Repeat1,
+  Gauge,
+  Timer,
+  History,
+  ArrowUpDown,
+  Trash
 } from 'lucide-react';
 
 // --- 全局動畫樣式 ---
@@ -205,7 +212,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V8</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -240,9 +247,74 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
   </nav>
 );
 
-const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, toggleFavorite }) => {
+
+// ==================== 排序下拉選單 ====================
+const SortDropdown = ({ sortBy, sortOrder, onSortChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const sortOptions = [
+    { value: 'createdAt', label: '建立時間', icon: Clock },
+    { value: 'visits', label: '訪問量', icon: Eye },
+    { value: 'downloads', label: '下載量', icon: Download },
+    { value: 'title', label: '標題', icon: ArrowUpDown },
+  ];
+  
+  const currentOption = sortOptions.find(o => o.value === sortBy) || sortOptions[0];
+  const CurrentIcon = currentOption.icon;
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+      >
+        <ArrowUpDown size={16} className="mr-2 text-gray-500" />
+        <CurrentIcon size={14} className="mr-1" />
+        <span>{sortOrder === 'desc' ? '↓' : '↑'}</span>
+        <span className="ml-1">{currentOption.label}</span>
+      </button>
+      
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+          {sortOptions.map(option => {
+            const OptionIcon = option.icon;
+            return (
+              <button
+                key={option.value}
+                onClick={() => {
+                  if (sortBy === option.value) {
+                    onSortChange(option.value, sortOrder === 'desc' ? 'asc' : 'desc');
+                  } else {
+                    onSortChange(option.value, 'desc');
+                  }
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+                  sortBy === option.value ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20' : 'text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <OptionIcon size={14} className="mr-2" />
+                {option.label}
+                {sortBy === option.value && (
+                  <span className="ml-auto">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, toggleFavorite, playHistory, onPlayFromHistory }) => {
   const [filter, setFilter] = useState('all'); 
-  const [searchTerm, setSearchTerm] = useState(''); // 搜尋關鍵字狀態
+  const [searchTerm, setSearchTerm] = useState('');
+  // 新功能：排序
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  // 新功能：顯示歷史記錄
+  const [showHistory, setShowHistory] = useState(false); // 搜尋關鍵字狀態
 
   const safeItems = items || [];
   const stats = {
@@ -253,18 +325,29 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
     singles: safeItems.filter(i => i.type === 'single').length,
   };
 
-  // 結合篩選與搜尋
-  const filteredItems = safeItems.filter(item => {
-    // 類型篩選
-    const matchesFilter = filter === 'all' || item.type === filter;
-    
-    // 搜尋過濾 (標題或說明)
-    const lowerSearch = searchTerm.toLowerCase();
-    const matchesSearch = item.title?.toLowerCase().includes(lowerSearch) || 
+  // 結合篩選、搜尋與排序
+  const filteredItems = safeItems
+    .filter(item => {
+      const matchesFilter = filter === 'all' || item.type === filter;
+      const lowerSearch = searchTerm.toLowerCase();
+      const matchesSearch = item.title?.toLowerCase().includes(lowerSearch) || 
                           item.description?.toLowerCase().includes(lowerSearch);
-
-    return matchesFilter && matchesSearch;
-  });
+      return matchesFilter && matchesSearch;
+    })
+    .sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      
+      if (sortBy === 'title') {
+        aVal = (aVal || '').toLowerCase();
+        bVal = (bVal || '').toLowerCase();
+        return sortOrder === 'desc' ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+      }
+      
+      aVal = Number(aVal) || 0;
+      bVal = Number(bVal) || 0;
+      return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+    });
 
   const renderEmptyState = () => {
     if (permissionError) {
@@ -280,6 +363,15 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
     if (safeItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">目前雲端資料庫是空的，請點擊右上角「新增頁面」開始建立。</div>;
     if (filteredItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">找不到符合「{searchTerm}」的資料。</div>;
     return <div className="text-gray-500 dark:text-gray-400">此分類目前沒有資料。</div>;
+  // 獲取歷史記錄中的項目詳情
+  const historyItems = playHistory
+    .map(historyItem => {
+      const fullItem = safeItems.find(i => i.id === historyItem.id);
+      return fullItem ? { ...fullItem, playedAt: historyItem.playedAt } : null;
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+
   };
 
   return (
@@ -316,17 +408,38 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-4">
           
-          {/* 分類按鈕 - 玻璃效果 */}
-          <div className="flex space-x-1 bg-gray-100/50 dark:bg-gray-700/50 backdrop-blur-sm p-1 rounded-xl">
-             {['all', 'single', 'playlist'].map(type => (
-               <button key={type} onClick={() => setFilter(type)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${filter === type ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md transform scale-105' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-600/50'}`}>
-                 {type === 'all' ? '🎵 全部' : type === 'single' ? '🎤 單曲' : '📋 播放清單'}
-               </button>
-             ))}
+          {/* 左側：分類按鈕 + 歷史記錄 */}
+          <div className="flex items-center space-x-2">
+            <div className="flex space-x-1 bg-gray-100/50 dark:bg-gray-700/50 backdrop-blur-sm p-1 rounded-xl">
+               {['all', 'single', 'playlist'].map(type => (
+                 <button key={type} onClick={() => setFilter(type)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${filter === type ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md transform scale-105' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-600/50'}`}>
+                   {type === 'all' ? '🎵 全部' : type === 'single' ? '🎤 單曲' : '📋 播放清單'}
+                 </button>
+               ))}
+            </div>
+            
+            {/* 新功能：歷史記錄按鈕 */}
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center transition-all duration-200 ${
+                showHistory 
+                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md' 
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <History size={14} className="mr-1" />
+              歷史記錄
+              {playHistory.length > 0 && (
+                <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-xs">{playHistory.length}</span>
+              )}
+            </button>
           </div>
 
-          {/* 搜尋框 - Glow 效果 */}
-          <div className="relative w-full md:w-72">
+          {/* 右側：排序 + 搜尋 */}
+          <div className="flex items-center space-x-2 w-full md:w-auto">
+            <SortDropdown sortBy={sortBy} sortOrder={sortOrder} onSortChange={(by, order) => { setSortBy(by); setSortOrder(order); }} />
+            
+            <div className="relative w-full md:w-72">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search size={16} className="text-gray-400" />
             </div>
@@ -336,17 +449,60 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
               className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent focus:shadow-lg focus:shadow-red-500/20 transition-all duration-200"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {searchTerm && (
-              <button 
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X size={14} />
-              </button>
-            )}
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
+        {/* 新功能：歷史記錄面板 */}
+        {showHistory && (
+          <div className="border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/10 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-blue-800 dark:text-blue-300 flex items-center">
+                <History size={16} className="mr-2" />
+                最近播放 (最多 20 首)
+              </h3>
+              {playHistory.length > 0 && (
+                <button 
+                  onClick={() => {
+                    if (confirm('確定清除所有播放歷史？')) {
+                      localStorage.removeItem('yt_play_history');
+                      window.location.reload();
+                    }
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 flex items-center"
+                >
+                  <Trash size={12} className="mr-1" />
+                  清除
+                </button>
+              )}
+            </div>
+            {historyItems.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">尚無播放記錄</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {historyItems.map((hItem, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onPlayFromHistory(hItem)}
+                    className="flex items-center px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
+                  >
+                    <PlayCircle size={14} className="mr-1.5 text-blue-500" />
+                    <span className="truncate max-w-[150px]">{hItem.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
 
         {filteredItems.length === 0 ? (
           <div className="p-12 text-center text-gray-500 dark:text-gray-400">{renderEmptyState()}</div>
@@ -572,6 +728,15 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const [duration, setDuration] = useState(0);
   const [isApiReady, setIsApiReady] = useState(false);
   
+  // 新功能：循環模式 (loopMode: 'none' | 'one' | 'all')
+  const [loopMode, setLoopMode] = useState('none');
+  // 新功能：播放速度
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
+  // 新功能：定時關閉
+  const [sleepTimer, setSleepTimer] = useState(0);
+  const sleepTimerRef = useRef(null);
+  
   // 1. 音量控制 (State)
   const [volume, setVolume] = useState(100); 
   const [isMuted, setIsMuted] = useState(false);
@@ -643,6 +808,32 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       if (volume === 0 && !isMuted) setIsMuted(true);
     }
   }, [volume]);
+
+  // 新功能：定時關閉計時器
+  useEffect(() => {
+    if (sleepTimer > 0) {
+      sleepTimerRef.current = setTimeout(() => {
+        if (playerRef.current && playerRef.current.pauseVideo) {
+          playerRef.current.pauseVideo();
+          setIsPlaying(false);
+        }
+        setSleepTimer(0);
+      }, sleepTimer * 60 * 1000);
+    }
+    
+    return () => {
+      if (sleepTimerRef.current) {
+        clearTimeout(sleepTimerRef.current);
+      }
+    };
+  }, [sleepTimer]);
+  
+  // 新功能：播放速度控制
+  useEffect(() => {
+    if (playerRef.current && playerRef.current.setPlaybackRate) {
+      playerRef.current.setPlaybackRate(playbackSpeed);
+    }
+  }, [playbackSpeed]);
 
   // 初始化播放器
   useEffect(() => {
@@ -743,16 +934,40 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   };
 
-  // 7. 隨機播放邏輯 (使用 shuffledIndices)
+  // 循環模式 + 隨機播放邏輯
   const next = () => {
+    // 單曲循環
+    if (loopMode === 'one') {
+      if (playerRef.current && playerRef.current.seekTo) {
+        playerRef.current.seekTo(0);
+        playerRef.current.playVideo();
+      }
+      return;
+    }
+    
+    // 列表循環 or 隨機
+    let nextIdx;
     if (shuffle) {
-      // 在 shuffledIndices 中找到當前 idx 的位置，然後往下一個
       const currentPos = shuffledIndices.indexOf(idx);
       const nextPos = (currentPos + 1) % shuffledIndices.length;
-      setIdx(shuffledIndices[nextPos]);
+      nextIdx = shuffledIndices[nextPos];
     } else {
-      setIdx(prevIdx => (prevIdx + 1) % vList.length);
+      nextIdx = (idx + 1) % vList.length;
     }
+    
+    // 如果是列表循環且到達末尾
+    if (loopMode === 'all' && nextIdx === 0 && !shuffle) {
+      // 重新隨機排序
+      const indices = Array.from({ length: vList.length }, (_, i) => i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      setShuffledIndices(indices);
+      nextIdx = indices[0];
+    }
+    
+    setIdx(nextIdx);
   };
 
   const prev = () => {
@@ -847,9 +1062,78 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                   </div>
                </div>
 
-               {item.type === 'playlist' && (
+               {/* 循環模式按鈕 */}
+                 <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                 <button 
+                   onClick={() => setLoopMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')} 
+                   className={`p-2 rounded-full transition ${
+                     loopMode !== 'none' 
+                       ? loopMode === 'one'
+                         ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400'
+                         : 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
+                       : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                   }`}
+                   title={loopMode === 'none' ? '關閉循環' : loopMode === 'all' ? '列表循環' : '單曲循環'}
+                 >
+                   {loopMode === 'one' ? <Repeat1 size={20}/> : <Repeat size={20}/>}
+                 </button>
+                 
+                 {/* 播放速度 */}
+                 <div className="relative group">
+                   <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center text-xs">
+                     <Gauge size={16} className="mr-1" />
+                     {playbackSpeed}x
+                   </button>
+                   <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                     {speedOptions.map(speed => (
+                       <button
+                         key={speed}
+                         onClick={() => setPlaybackSpeed(speed)}
+                         className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
+                           playbackSpeed === speed 
+                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
+                             : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                         }`}
+                       >
+                         {speed}x
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+                 
+                 {/* 定時關閉 */}
+                 <div className="relative group">
+                   <button 
+                     className={`p-2 rounded-full flex items-center text-xs ${
+                       sleepTimer > 0 
+                         ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' 
+                         : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                     }`}
+                     title={sleepTimer > 0 ? `${sleepTimer}分鐘後停止` : '定時關閉'}
+                   >
+                     <Timer size={18} />
+                     {sleepTimer > 0 && <span className="ml-1">{sleepTimer}</span>}
+                   </button>
+                   <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                     {[0, 15, 30, 45, 60, 90].map(mins => (
+                       <button
+                         key={mins}
+                         onClick={() => setSleepTimer(mins)}
+                         className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
+                           sleepTimer === mins 
+                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
+                             : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                         }`}
+                       >
+                         {mins === 0 ? '關閉' : `${mins} 分鐘`}
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+                 
+                 {item.type === 'playlist' && (
                  <>
-                   <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-2"></div>
+                   <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
                    <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full transition ${shuffle?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400':'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={20}/></button>
                    <button onClick={prev} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipBack size={20}/></button>
                    <button onClick={next} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipForward size={20}/></button>
@@ -887,7 +1171,9 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   );
 };
 
-const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport }) => (
+const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport, handleBatchDelete }) => (
+  // 新功能：批量刪除狀態
+  const [selectedIds, setSelectedIds] = useState([]);
   <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden transition-colors">
     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 border-b border-blue-100 dark:border-blue-900/30 flex justify-between">
        <div className="flex gap-4 text-xs font-bold text-blue-800 dark:text-blue-300 items-center">
@@ -896,8 +1182,52 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport 
          <span className="text-gray-400 dark:text-gray-500 font-mono">ID: yt-manager-global</span>
        </div>
     </div>
-    <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between"><h2 className="text-xl font-bold flex items-center text-gray-800 dark:text-white"><List className="mr-2"/> 管理</h2><div className="flex gap-2"><label className="cursor-pointer px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-700 dark:text-gray-300"><Upload size={16} className="mr-2"/> 匯入<input type="file" className="hidden" accept=".csv" onChange={handleImport}/></label><button onClick={handleExport} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-700 dark:text-gray-300"><Download size={16} className="mr-2"/> 匯出</button></div></div>
-    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"><thead className="bg-gray-50 dark:bg-gray-700"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">標題</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">類型</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">數據</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th></tr></thead><tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">{items.map(i=>(<tr key={i.id}><td className="px-6 py-4"><div className="text-sm font-medium text-gray-900 dark:text-white">{i.title}</div></td><td className="px-6 py-4"><span className={`px-2 text-xs rounded-full ${i.type==='playlist'?'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400':'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'}`}>{i.type==='playlist'?'清單':'單曲'}</span></td><td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{i.visits||0}/{i.downloads||0}</td><td className="px-6 py-4 text-right space-x-2"><button onClick={()=>openEdit(i)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"><Edit size={16}/></button><button onClick={()=>handleDelete(i.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"><Trash2 size={16}/></button></td></tr>))}</tbody></table>
+    <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+    <h2 className="text-xl font-bold flex items-center text-gray-800 dark:text-white"><List className="mr-2"/> 管理</h2>
+    {selectedIds.length > 0 && (
+      <button 
+        onClick={() => {
+          if (confirm(`確定刪除已選取的 ${selectedIds.length} 項目？`)) {
+            handleBatchDelete(selectedIds);
+            setSelectedIds([]);
+          }
+        }}
+        className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center hover:bg-red-200 dark:hover:bg-red-900/50"
+      >
+        <Trash size={14} className="mr-1" />
+        刪除已選 ({selectedIds.length})
+      </button>
+    )}
+    <div className="flex gap-2"><label className="cursor-pointer px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-700 dark:text-gray-300"><Upload size={16} className="mr-2"/> 匯入<input type="file" className="hidden" accept=".csv" onChange={handleImport}/></label><button onClick={handleExport} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-700 dark:text-gray-300"><Download size={16} className="mr-2"/> 匯出</button></div></div>
+    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"><thead className="bg-gray-50 dark:bg-gray-700"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-8">
+              <input 
+                type="checkbox" 
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedIds(items.map(i => i.id));
+                  } else {
+                    setSelectedIds([]);
+                  }
+                }}
+                checked={selectedIds.length === items.length && items.length > 0}
+                className="rounded border-gray-300"
+              />
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">標題</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">類型</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">數據</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th></tr></thead><tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">{items.map(i=>(<tr key={i.id}><td className="px-4 py-4">
+              <input 
+                type="checkbox" 
+                checked={selectedIds.includes(i.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedIds([...selectedIds, i.id]);
+                  } else {
+                    setSelectedIds(selectedIds.filter(id => id !== i.id));
+                  }
+                }}
+                className="rounded border-gray-300"
+              />
+            </td>
+            <td className="px-6 py-4"><div className="text-sm font-medium text-gray-900 dark:text-white">{i.title}</div></td><td className="px-6 py-4"><span className={`px-2 text-xs rounded-full ${i.type==='playlist'?'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400':'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'}`}>{i.type==='playlist'?'清單':'單曲'}</span></td><td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{i.visits||0}/{i.downloads||0}</td><td className="px-6 py-4 text-right space-x-2"><button onClick={()=>openEdit(i)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"><Edit size={16}/></button><button onClick={()=>handleDelete(i.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"><Trash2 size={16}/></button></td></tr>))}</tbody></table>
   </div>
 );
 
@@ -919,6 +1249,35 @@ export default function App() {
   const [permErr, setPermErr] = useState(false);
   // 6. 訪客計數 (LocalStorage 模擬)
   const [visitorCount, setVisitorCount] = useState(0);
+  
+  // 新功能：播放歷史
+  const [playHistory, setPlayHistory] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return JSON.parse(localStorage.getItem('yt_play_history') || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+  
+  // 新功能：添加播放歷史
+  const addToHistory = (item) => {
+    const newHistory = [
+      { id: item.id, playedAt: Date.now() },
+      ...playHistory.filter(h => h.id !== item.id)
+    ].slice(0, 20);
+    setPlayHistory(newHistory);
+    localStorage.setItem('yt_play_history', JSON.stringify(newHistory));
+  };
+  
+  // 新功能：從歷史記錄播放
+  const handlePlayFromHistory = (item) => {
+    addToHistory(item);
+    setActiveItem(item);
+    setView('view');
+  };
   
   // 收藏功能
   const [favorites, setFavorites] = useState(() => {
@@ -980,6 +1339,17 @@ export default function App() {
     if(window.confirm('確認刪除?')) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id)); showNotification('已刪除'); } catch(e) { showNotification('刪除失敗', 'error'); } }
   };
   
+  const handleBatchDelete = async (ids) => {
+    try {
+      for (const id of ids) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', id));
+      }
+      showNotification(`已刪除 ${ids.length} 筆`);
+    } catch(e) { 
+      showNotification('批量刪除失敗', 'error'); 
+    }
+  };
+  
   const handleImport = (e) => {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
@@ -1011,6 +1381,7 @@ export default function App() {
   };
   
   const viewItem = async (item) => {
+    addToHistory(item);
     setActiveItem(item); setView('view');
     try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'yt_manager_items', item.id), {visits: (item.visits||0)+1}); } catch(e){}
   };
@@ -1067,12 +1438,12 @@ export default function App() {
       <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading} isDarkMode={isDarkMode} toggleTheme={toggleTheme}/>
       {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow text-white z-50 ${notification.type==='error'?'bg-red-500':'bg-green-500'}`}>{notification.msg}</div>}
       <main className="max-w-7xl mx-auto py-6 px-4">
-        {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr} favorites={favorites} toggleFavorite={toggleFavorite}/>}
+        {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr} favorites={favorites} toggleFavorite={toggleFavorite} playHistory={playHistory} onPlayFromHistory={handlePlayFromHistory}/>}
         {view === 'create' && <CreatePage items={items} handleCreate={handleCreate} setView={setView} showNotification={showNotification}/>}
         {view === 'edit' && editItem && <EditPage item={editItem} items={items} handleUpdate={handleUpdate} setView={setView} showNotification={showNotification}/>}
         {view === 'view' && activeItem && <PlayerView item={activeItem} setView={setView} recordDownload={recordDownload}/>}
         {view === 'login' && <LoginView onLogin={handleLogin} setView={setView}/>}
-        {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={openEdit} handleImport={handleImport} handleExport={handleExport}/>}
+        {view === 'admin' && <AdminPanel items={items} handleDelete={handleDelete} openEdit={openEdit} handleImport={handleImport} handleExport={handleExport} handleBatchDelete={handleBatchDelete}/>}
       </main>
       
       {/* 底部狀態列 (包含訪客計數) */}
