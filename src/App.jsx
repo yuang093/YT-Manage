@@ -217,7 +217,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V12</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V13</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -1002,6 +1002,74 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     if (playerRef.current) {
       playerRef.current.seekTo(newTime, true);
     }
+  };
+
+  // 新功能：歌詞搜尋
+  const searchLyrics = async () => {
+    if (!curTitle) return;
+    try {
+      const query = curTitle.replace(/\([^)]*\)/g, '').replace(/\[.*\]/g, '').trim();
+      const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data.lyrics) {
+        setLyrics(data.lyrics);
+      } else {
+        setLyrics('❌ 找不到歌詞\n\n請嘗試其他歌曲');
+      }
+    } catch(e) {
+      setLyrics('⚠️ 網路錯誤\n\n請檢查網路連線');
+    }
+  };
+
+  // 新功能：畫質選擇
+  const setQuality = (quality) => {
+    if (!playerRef.current) return;
+    try {
+      if (quality === 'auto') {
+        playerRef.current.setPlaybackQualityRange('hd720', 'hd1080');
+      } else {
+        const qMap = { '1080p': 'hd1080', '720p': 'hd720', '480p': 'large', '360p': 'medium', '240p': 'small', '144p': 'tiny' };
+        playerRef.current.setPlaybackQuality(qMap[quality] || 'medium');
+      }
+      setSelectedQuality(quality);
+    } catch(e) {}
+  };
+
+  // 新功能：畫中畫
+  const togglePiP = async () => {
+    try {
+      const playerElement = document.querySelector('#yt-player iframe');
+      if (!playerElement) return;
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPiP(false);
+      } else {
+        await playerElement.requestPictureInPicture();
+        setIsPiP(true);
+      }
+    } catch (err) {
+      console.log('PiP not supported:', err);
+    }
+  };
+
+  // 新功能：分享
+  const shareVideo = async () => {
+    const url = `https://youtube.com/watch?v=${videoId}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: curTitle, url });
+      } catch(e) {}
+    } else {
+      navigator.clipboard.writeText(url);
+      alert('連結已複製到剪貼簿！');
+    }
+  };
+
+  // 新功能：睡眠定時器格式化
+  const formatSleepTimer = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   // 1. 音量控制 (對數調整優化 Logarithmic)
