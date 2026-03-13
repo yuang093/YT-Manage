@@ -208,7 +208,7 @@ const csvToArray = (csvText) => {
 };
 
 // --- UI ---
-const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleTheme }) => (
+const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleTheme, autoDarkMode, setAutoDarkMode }) => (
   <nav className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 dark:from-red-900 dark:via-red-800 dark:to-red-900 text-white shadow-lg transition-all duration-300">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between h-16">
@@ -217,7 +217,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V13</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V14</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -756,6 +756,22 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const [sleepTimer, setSleepTimer] = useState(0); // 睡眠定時器 (分鐘)
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState(0); // 剩餘秒數
   const sleepTimerRef = useRef(null);
+  
+  // 新功能：畫中畫
+  const [isPiP, setIsPiP] = useState(false);
+  // 新功能：畫質選擇
+  const [availableQualities, setAvailableQualities] = useState([]);
+  const [selectedQuality, setSelectedQuality] = useState('auto');
+  // 新功能：歌詞
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [lyrics, setLyrics] = useState('🎵 歌詞功能\n\n點擊歌曲名稱可搜尋歌詞\n\n(此功能需要網路連線)');
+  // 新功能：統計
+  const [showStats, setShowStats] = useState(false);
+  const [totalStats, setTotalStats] = useState({ totalTime: 0, totalVideos: 0, sessionStart: Date.now() });
+  // 新功能：快捷鍵說明
+  const [showHelp, setShowHelp] = useState(false);
+  // 新功能：播放列表搜尋
+  const [playlistSearch, setPlaylistSearch] = useState('');
   
   // 1. 音量控制 (State)
   const [volume, setVolume] = useState(100); 
@@ -1898,7 +1914,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
-      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading} isDarkMode={isDarkMode} toggleTheme={toggleTheme}/>
+      <Header setView={setView} isAdmin={isAdmin} handleLogout={handleLogout} isLoading={isLoading} isDarkMode={isDarkMode} toggleTheme={toggleTheme} autoDarkMode={autoDarkMode} setAutoDarkMode={setAutoDarkMode}/>
       {notification && <div className={`fixed top-4 right-4 p-4 rounded shadow text-white z-50 ${notification.type==='error'?'bg-red-500':'bg-green-500'}`}>{notification.msg}</div>}
       <main className="max-w-7xl mx-auto py-6 px-4">
         {view === 'home' && <Dashboard items={items} viewItem={viewItem} isLoading={isLoading} permissionError={permErr} favorites={favorites} toggleFavorite={toggleFavorite} playHistory={playHistory} onPlayFromHistory={handlePlayFromHistory}/>}
