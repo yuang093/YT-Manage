@@ -1265,9 +1265,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   );
 };
 
-const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport, handleBatchDelete }) => (
+const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport, handleBatchDelete }) => {
   // 新功能：批量刪除狀態
   const [selectedIds, setSelectedIds] = useState([]);
+  return (
   <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden transition-colors">
     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 border-b border-blue-100 dark:border-blue-900/30 flex justify-between">
        <div className="flex gap-4 text-xs font-bold text-blue-800 dark:text-blue-300 items-center">
@@ -1323,7 +1324,8 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport,
             </td>
             <td className="px-6 py-4"><div className="text-sm font-medium text-gray-900 dark:text-white">{i.title}</div></td><td className="px-6 py-4"><span className={`px-2 text-xs rounded-full ${i.type==='playlist'?'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400':'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'}`}>{i.type==='playlist'?'清單':'單曲'}</span></td><td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{i.visits||0}/{i.downloads||0}</td><td className="px-6 py-4 text-right space-x-2"><button onClick={()=>openEdit(i)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"><Edit size={16}/></button><button onClick={()=>handleDelete(i.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"><Trash2 size={16}/></button></td></tr>))}</tbody></table>
   </div>
-);
+  );
+};
 
 const LoginView = ({ onLogin, setView }) => {
   const [p, setP] = useState('');
