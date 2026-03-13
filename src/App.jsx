@@ -212,7 +212,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V9</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V10</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -579,6 +579,13 @@ const CreatePage = ({ items, handleCreate, setView, showNotification }) => {
     e.preventDefault();
     if (type === 'single') {
       if (!getYouTubeID(url)) return showNotification('無效的 YouTube 連結', 'error');
+      // V10 新功能：重複歌曲檢測
+      const videoId = getYouTubeID(url);
+      const isDuplicate = items.some(i => {
+        if (i.type === 'single') return getYouTubeID(i.url) === videoId;
+        return i.urls?.some(u => getYouTubeID(u.url || u) === videoId);
+      });
+      if (isDuplicate && !confirm('偵測到相同的 YouTube 連結，是否仍要新增？')) return;
       handleCreate({ type, title, description, url });
     } else {
       const validManualItems = manualItems.filter(item => getYouTubeID(item.url)).map(item => ({ url: item.url, title: item.title || item.url }));
@@ -761,6 +768,22 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       setIdx(Math.floor(Math.random() * item.urls.length));
     }
     setIsPlaying(false);
+    
+    // V10 新功能：恢復播放進度
+    const savedProgress = localStorage.getItem(`yt-progress-${item.id}`);
+    if (savedProgress) {
+      try {
+        const { idx: savedIdx, time: savedTime, listLength } = JSON.parse(savedProgress);
+        if (listLength === (item.urls?.length || 1)) {
+          setIdx(savedIdx || 0);
+          setTimeout(() => {
+            if (playerRef.current && playerRef.current.seekTo) {
+              playerRef.current.seekTo(savedTime || 0, true);
+            }
+          }, 2000);
+        }
+      } catch (e) {}
+    }
   }, [item]);
 
   // 當清單載入或 shuffle 切換時，產生新的隨機佇列
@@ -1085,7 +1108,17 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex justify-between mb-4">
-          <button onClick={()=>setView('home')} className="flex items-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"><SkipBack size={16} className="mr-1"/> 返回列表</button>
+          <button onClick={() => {
+          // V10 新功能：儲存播放進度
+          if (item && item.id) {
+            localStorage.setItem(`yt-progress-${item.id}`, JSON.stringify({
+              idx: idx,
+              time: currentTime,
+              listLength: vList.length
+            }));
+          }
+          setView('home');
+        }} className="flex items-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"><SkipBack size={16} className="mr-1"/> 返回列表</button>
           
           {/* 2. 純音樂模式切換 (顯示/隱藏影片，不中斷播放) */}
           <button 
@@ -1228,7 +1261,22 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                  {item.type === 'playlist' && (
                  <>
                    <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                   <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full transition ${shuffle?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400':'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={20}/></button>
+                   {/* V10 新功能：歌單內隨機播放 - 重新洗牌按鈕 */}
+                <button onClick={() => {
+                  const indices = Array.from({ length: vList.length }, (_, i) => i);
+                  for (let i = indices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [indices[i], indices[j]] = [indices[j], indices[i]];
+                  }
+                  // 確保目前播放的歌在第一個
+                  const currentIdxInShuffled = indices.indexOf(idx);
+                  if (currentIdxInShuffled !== -1 && currentIdxInShuffled !== 0) {
+                    [indices[0], indices[currentIdxInShuffled]] = [indices[currentIdxInShuffled], indices[0]];
+                  }
+                  setShuffledIndices(indices);
+                  setIdx(indices[0]);
+                }} className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="重新洗牌"><Shuffle size={18} className="transform rotate-180"/></button>
+                <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full transition ${shuffle?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400':'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={20}/></button>
                    <button onClick={prev} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipBack size={20}/></button>
                    <button onClick={next} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipForward size={20}/></button>
                  </>
