@@ -46,7 +46,13 @@ import {
   Timer,
   History,
   ArrowUpDown,
-  Trash
+  Trash,
+  Monitor,
+  Share2,
+  Mic,
+  BarChart2,
+  HelpCircle,
+  Settings
 } from 'lucide-react';
 
 // --- 全局動畫樣式 ---
@@ -212,7 +218,7 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V10</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V11</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -222,6 +228,13 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             title={isDarkMode ? "切換亮色模式" : "切換深色模式"}
           >
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <button 
+            onClick={() => setAutoDarkMode(a => !a)} 
+            className={`p-2 rounded-full transition-colors focus:outline-none ${autoDarkMode ? 'bg-purple-600 text-white' : 'hover:bg-red-700 dark:hover:bg-red-800'}`}
+            title={autoDarkMode ? "自動深夜模式: 開 (22:00-06:00 強制暗色)" : "自動深夜模式: 關"}
+          >
+            {autoDarkMode ? <Clock size={16} /> : <Clock size={16} className="opacity-50"/>}
           </button>
           
           <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
@@ -741,7 +754,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
   // 新功能：定時關閉
-  const [sleepTimer, setSleepTimer] = useState(0);
+  const [sleepTimer, setSleepTimer] = useState(0); // 睡眠定時器 (分鐘)
+  const [sleepTimerRemaining, setSleepTimerRemaining] = useState(0); // 剩餘秒數
   const sleepTimerRef = useRef(null);
   
   // 1. 音量控制 (State)
@@ -909,13 +923,31 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           if(progressInterval.current) clearInterval(progressInterval.current);
           progressInterval.current = setInterval(() => {
              setCurrentTime(playerRef.current.getCurrentTime());
+        // 追蹤播放時間
+        setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
           }, 1000);
         } else {
           if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
           if (event.data === window.YT.PlayerState.ENDED) {
              setIsPlaying(false);
-             // 3. 行動裝置連續播放 (自動觸發)
-             if (nextRef.current) nextRef.current(); 
+             // 循環模式處理
+             if (loopMode === 'one') {
+               if (playerRef.current?.seekTo) {
+                 playerRef.current.seekTo(0);
+                 playerRef.current.playVideo();
+               }
+             } else if (loopMode === 'all' && playlist.length > 0) {
+               // 列表循環 - 回到第一首
+               if (currentIndex === playlist.length - 1) {
+                 setCurrentIndex(0);
+                 setVideoId(playlist[0]?.videoId);
+               } else if (nextRef.current) {
+                 nextRef.current();
+               }
+             } else if (nextRef.current) {
+               // 3. 行動裝置連續播放 (自動觸發)
+               nextRef.current(); 
+             }
           }
           clearInterval(progressInterval.current);
         }
@@ -939,7 +971,12 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           'onReady': (e) => {
              setDuration(e.target.getDuration());
              e.target.setVolume(volume); // 設定初始音量
-             e.target.playVideo(); 
+             e.target.playVideo();
+             
+             // 嘗試啟用畫中畫 (如果處於畫中畫模式)
+             if (document.pictureInPictureEnabled && !e.target.disablePictureInPicture) {
+               // 等待影片準備好
+             }
           }
         }
       });
@@ -1037,10 +1074,28 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           setShuffle(s => !s);
           break;
         case 'f':
-        case 'F':
-          // 切換純音樂模式
+        case '?':
+          // 顯示/隱藏快捷鍵說明
           e.preventDefault();
-          setAudio(a => !a);
+          setShowHelp(h => !h);
+          break;
+        case 'F':
+          // 切換純音樂模式 + 影片顯示大小調整
+          e.preventDefault();
+          setAudio(a => {
+            // 切換後通知 YouTube player 調整大小
+            setTimeout(() => {
+              if (playerRef.current && playerRef.current.setSize) {
+                const container = containerRef.current;
+                if (container) {
+                  const w = container.offsetWidth;
+                  const h = container.offsetHeight;
+                  playerRef.current.setSize(w, h);
+                }
+              }
+            }, 100);
+            return !a;
+          });
           break;
         default:
           break;
@@ -1122,7 +1177,20 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           
           {/* 2. 純音樂模式切換 (顯示/隱藏影片，不中斷播放) */}
           <button 
-            onClick={()=>setAudio(!audio)} 
+            onClick={()=>{
+              setAudio(!audio);
+              // 切換後通知 YouTube player 調整大小
+              setTimeout(() => {
+                if (playerRef.current && playerRef.current.setSize) {
+                  const container = containerRef.current;
+                  if (container) {
+                    const w = container.offsetWidth;
+                    const h = container.offsetHeight;
+                    playerRef.current.setSize(w, h);
+                  }
+                }
+              }, 100);
+            }} 
             className={`flex items-center px-3 py-1 rounded-full text-sm transition-colors ${audio ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
           >
             {audio ? <Music size={16} className="mr-1" /> : <Youtube size={16} className="mr-1" />}
@@ -1141,6 +1209,82 @@ const PlayerView = ({ item, setView, recordDownload }) => {
              <p className="text-gray-300 text-sm font-medium truncate max-w-xs px-4">{curTitle}</p>
          </div>
       </div>
+
+      {/* 歌詞面板 */}
+      {showLyrics && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowLyrics(false)}>
+          <div className="bg-gray-900 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white">🎵 歌詞</h3>
+              <button onClick={() => setShowLyrics(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div className="text-gray-300 whitespace-pre-wrap leading-relaxed text-center">
+              {lyrics}
+            </div>
+            <button onClick={searchLyrics} className="mt-4 w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">
+              🔍 重新搜尋歌詞
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 快捷鍵說明面板 */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowHelp(false)}>
+          <div className="bg-gray-900 rounded-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white">⌨️ 快捷鍵</h3>
+              <button onClick={() => setShowHelp(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm text-gray-300">
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">Space</kbd> 播放/暫停</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">←</kbd> 上一首</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">→</kbd> 下一首</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">↑</kbd> 音量+</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">↓</kbd> 音量-</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">M</kbd> 靜音</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">F</kbd> 純音樂模式</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">L</kbd> 循環模式</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">P</kbd> 畫中畫</div>
+              <div><kbd className="bg-gray-700 px-2 py-1 rounded">?</kbd> 顯示說明</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 統計面板 */}
+      {showStats && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowStats(false)}>
+          <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-white">📊 播放統計</h3>
+              <button onClick={() => setShowStats(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-4 text-gray-300">
+              <div className="flex justify-between">
+                <span>🎬 總播放影片數</span>
+                <span className="font-bold text-white">{stats.totalVideos}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>⏱️ 總播放時間</span>
+                <span className="font-bold text-white">{Math.floor(stats.totalTime / 60)} 分 {stats.totalTime % 60} 秒</span>
+              </div>
+              <div className="flex justify-between">
+                <span>📅 連續播放</span>
+                <span className="font-bold text-white">{Math.floor((Date.now() - stats.sessionStart) / 60000)} 分鐘</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 睡眠定時器顯示 */}
+      {sleepTimer > 0 && sleepTimerRemaining > 0 && (
+        <div className="fixed top-4 right-4 bg-purple-600 text-white px-4 py-2 rounded-full shadow-lg z-40 flex items-center">
+          <Clock size={16} className="mr-2"/>
+          💤 {formatSleepTimer(sleepTimerRemaining)}
+        </div>
+      )}
 
       {/* 控制列 */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-5 border-t-4 border-red-600 space-y-4 transition-colors">
@@ -1204,6 +1348,64 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                  >
                    {loopMode === 'one' ? <Repeat1 size={20}/> : <Repeat size={20}/>}
                  </button>
+
+               {/* 睡眠定時器 */}
+               <button 
+                 onClick={() => setSleepTimer(t => {
+                   if (t >= 120) return 0;
+                   return t === 0 ? 15 : t === 15 ? 30 : t === 30 ? 60 : t === 60 ? 90 : 120;
+                 })}
+                 className={`p-2 rounded-full transition ${sleepTimer > 0 ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                 title={sleepTimer > 0 ? `睡眠定時: ${sleepTimer}分鐘` : '睡眠定時器'}
+               >
+                 <Clock size={20}/>
+                 {sleepTimer > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center">{sleepTimer}</span>}
+               </button>
+
+               {/* 畫中畫 */}
+               <button 
+                 onClick={togglePiP}
+                 className={`p-2 rounded-full transition ${isPiP ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                 title="畫中畫"
+               >
+                 <Monitor size={20}/>
+               </button>
+
+               {/* 分享 */}
+               <button 
+                 onClick={shareVideo}
+                 className="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
+                 title="分享"
+               >
+                 <Share2 size={20}/>
+               </button>
+
+               {/* 歌詞 */}
+               <button 
+                 onClick={() => { setShowLyrics(!showLyrics); if (!showLyrics && lyrics.includes('點擊上方按鈕')) searchLyrics(); }}
+                 className={`p-2 rounded-full transition ${showLyrics ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                 title="歌詞"
+               >
+                 <Mic size={20}/>
+               </button>
+
+               {/* 統計 */}
+               <button 
+                 onClick={() => setShowStats(!showStats)}
+                 className={`p-2 rounded-full transition ${showStats ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                 title="播放統計"
+               >
+                 <BarChart2 size={20}/>
+               </button>
+
+               {/* 快捷鍵說明 */}
+               <button 
+                 onClick={() => setShowHelp(!showHelp)}
+                 className={`p-2 rounded-full transition ${showHelp ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                 title="快捷鍵 (?)"
+               >
+                 <HelpCircle size={20}/>
+               </button>
                  
                  {/* 播放速度 */}
                  <div className="relative group">
@@ -1227,6 +1429,31 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                      ))}
                    </div>
                  </div>
+
+                 {/* 畫質選擇 */}
+                 {availableQualities.length > 0 && (
+                   <div className="relative group">
+                     <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center text-xs">
+                       <Settings size={16} className="mr-1" />
+                       {selectedQuality}
+                     </button>
+                     <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                       {availableQualities.map(q => (
+                         <button
+                           key={q}
+                           onClick={() => setQuality(q)}
+                           className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
+                             selectedQuality === q 
+                               ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
+                               : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                           }`}
+                         >
+                           {q}
+                         </button>
+                       ))}
+                     </div>
+                   </div>
+                 )}
                  
                  {/* 定時關閉 */}
                  <div className="relative group">
@@ -1294,7 +1521,15 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         
         {item.type === 'playlist' && (
           <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-            <h3 className="font-bold flex mb-4 text-gray-700 dark:text-gray-300"><List size={18} className="mr-2"/> 播放清單 ({vList.length})</h3>
+            <h3 className="font-bold flex mb-2 text-gray-700 dark:text-gray-300"><List size={18} className="mr-2"/> 播放清單 ({filteredPlaylist.length}/{vList.length})</h3>
+            {/* 播放列表搜尋 */}
+            <input 
+              type="text" 
+              placeholder="🔍 搜尋歌曲..." 
+              value={playlistSearch}
+              onChange={e => setPlaylistSearch(e.target.value)}
+              className="w-full mb-2 px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-red-500"
+            />
             <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
               {vList.map((v, i) => (
                 <div key={i} onClick={()=>setIdx(i)} className={`p-3 cursor-pointer flex items-center border-b last:border-0 border-gray-200 dark:border-gray-700 ${i===idx?'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 font-medium':'hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-600 dark:text-gray-400'}`}>
@@ -1444,6 +1679,23 @@ export default function App() {
   };
   
   // 深色模式狀態
+  const [autoDarkMode, setAutoDarkMode] = useState(() => {
+    return localStorage.getItem('yt_auto_dark_mode') !== 'false';
+  });
+
+  // 自動深夜模式 effect
+  useEffect(() => {
+    if (!autoDarkMode) return;
+    const hour = new Date().getHours();
+    if (hour >= 22 || hour < 6) {
+      setIsDarkMode(true);
+    }
+  }, [autoDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('yt_auto_dark_mode', autoDarkMode);
+  }, [autoDarkMode]);
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark' || 
