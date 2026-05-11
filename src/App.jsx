@@ -298,6 +298,8 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
     if (safeItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">目前雲端資料庫是空的，請點擊右上角「新增頁面」開始建立。</div>;
     if (filteredItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">找不到符合「{searchTerm}」的資料。</div>;
     return <div className="text-gray-500 dark:text-gray-400">此分類目前沒有資料。</div>;
+  };
+
   // 獲取歷史記錄中的項目詳情
   const historyItems = playHistory
     .map(historyItem => {
@@ -306,8 +308,6 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
     })
     .filter(Boolean)
     .slice(0, 20);
-
-  };
 
   return (
     <div className="space-y-6">
