@@ -998,7 +998,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         playerRef.current = null;
       }
     };
-  }, [isApiReady, videoId, audio]);  // 加入 audio - 每次切換都重建播放器
+  }, [isApiReady, videoId]);  // 加入 audio - 每次切換都重建播放器
 
   // audio 模式切換偵錯
   useEffect(() => {
