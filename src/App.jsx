@@ -924,50 +924,46 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   }, [playbackSpeed]);
 
-  // 初始化播放器 (只在 videoId 改變時建立)
+  // 初始化播放器
   useEffect(() => {
     if (!isApiReady || !videoId || !containerRef.current) return;
-    console.log('[Player] Initializing with videoId:', videoId);
+    console.log('[Player] Initializing');
 
-    // 延遲建立，確保 DOM 準備好
-    console.log('[Player] Setting up timer, containerRef:', containerRef.current);
-    const timer = setTimeout(() => {
-      console.log('[Player] Timer fired, creating player');
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
+    // 清除舊播放器
+    if (playerRef.current) {
+      playerRef.current.destroy();
+      playerRef.current = null;
+    }
 
-      const onStateChange = (event) => {
-        if (event.data === window.YT.PlayerState.PLAYING) {
-          setIsPlaying(true);
-          setDuration(playerRef.current.getDuration());
-          if (progressInterval.current) clearInterval(progressInterval.current);
-          progressInterval.current = setInterval(() => {
-            setCurrentTime(playerRef.current.getCurrentTime());
-            setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
-          }, 1000);
-        } else {
-          if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
-          if (event.data === window.YT.PlayerState.ENDED) {
-            setIsPlaying(false);
-            if (loopMode === 'one' && playerRef.current?.seekTo) {
-              playerRef.current.seekTo(0);
-              playerRef.current.playVideo();
-            } else if (nextRef.current) {
-              nextRef.current();
-            }
+    const onStateChange = (event) => {
+      if (event.data === window.YT.PlayerState.PLAYING) {
+        setIsPlaying(true);
+        setDuration(playerRef.current.getDuration());
+        if (progressInterval.current) clearInterval(progressInterval.current);
+        progressInterval.current = setInterval(() => {
+          setCurrentTime(playerRef.current.getCurrentTime());
+          setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
+        }, 1000);
+      } else {
+        if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
+        if (event.data === window.YT.PlayerState.ENDED) {
+          setIsPlaying(false);
+          if (loopMode === 'one' && playerRef.current?.seekTo) {
+            playerRef.current.seekTo(0);
+            playerRef.current.playVideo();
+          } else if (nextRef.current) {
+            nextRef.current();
           }
-          clearInterval(progressInterval.current);
         }
-      };
+        clearInterval(progressInterval.current);
+      }
+    };
 
-      console.log('[Player] Before creating YT.Player');
-      try {
-        playerRef.current = new window.YT.Player('yt-player', {
-          height: '100%',
-          width: '100%',
-          videoId: videoId,
+    setTimeout(() => {
+      playerRef.current = new window.YT.Player('yt-player', {
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
         playerVars: {
           'autoplay': 1,
           'controls': 0,
@@ -987,23 +983,22 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           }
         }
       });
-      console.log('[Player] After creating YT.Player, playerRef:', playerRef.current);
-      } catch (e) {
-        console.error('[Player] Error creating player:', e);
-      }
     }, 100);
 
     return () => {
-      console.log('[Player] Cleanup - timer cleared');
       clearTimeout(timer);
       if (progressInterval.current) clearInterval(progressInterval.current);
       if (playerRef.current) {
-        console.log('[Player] Cleanup - destroying player');
         playerRef.current.destroy();
         playerRef.current = null;
       }
     };
-  }, [isApiReady, videoId]);
+  }, [isApiReady, videoId, audio]);  // 加入 audio - 每次切換都重建播放器
+
+  // audio 模式切換偵錯
+  useEffect(() => {
+    console.log('[Audio Mode] changed to:', audio);
+  }, [audio]);
 
   // audio 模式切換：使用 CSS opacity 控制顯示
   useEffect(() => {
