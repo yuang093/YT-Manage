@@ -57,20 +57,21 @@ import {
   HelpCircle
 } from 'lucide-react';
 
+
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+
 // --- 全局動畫樣式 ---
-const style = document.createElement('style');
-style.textContent = `
+const styleEl = document.createElement('style');
+styleEl.textContent = `
   @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
   .animate-fadeInUp { animation: fadeInUp 0.3s ease-out forwards; }
 `;
-if (typeof document !== 'undefined') document.head.appendChild(style);
-
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+if (typeof document !== 'undefined') document.head.appendChild(styleEl);
 
 // ============================================================================
 // Firebase 設定
