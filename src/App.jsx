@@ -927,15 +927,14 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   // 初始化播放器
   useEffect(() => {
     if (isApiReady && videoId && containerRef.current) {
+      // 每次 (包括 audio 模式切換) 都摧毀舊播放器重建
       if (playerRef.current) {
-        // 如果只是換歌，直接 loadVideoById 比較順暢
-        if (typeof playerRef.current.loadVideoById === 'function') {
-           playerRef.current.loadVideoById(videoId);
-           return; 
-        } else {
-           playerRef.current.destroy(); // Fallback
-        }
+        playerRef.current.destroy();
+        playerRef.current = null;
       }
+
+      // 延遲建立新播放器，確保 DOM 已更新
+      const timer = setTimeout(() => {
 
       const onStateChange = (event) => {
         if (event.data === window.YT.PlayerState.PLAYING) {
@@ -974,37 +973,38 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         }
       };
 
-      playerRef.current = new window.YT.Player('yt-player', {
-        height: '100%',
-        width: '100%',
-        videoId: videoId,
-        playerVars: {
-          'autoplay': 1,
-          'controls': 0, 
-          'playsinline': 1, // 3. 相容 iOS
-          'disablekb': 1,
-          'fs': 0,
-          'rel': 0,
-          'iv_load_policy': 3 // 隱藏註釋
-        },
-        events: {
-          'onStateChange': onStateChange,
-          'onReady': (e) => {
-             setDuration(e.target.getDuration());
-             e.target.setVolume(volume); // 設定初始音量
-             e.target.playVideo();
-             
-             // 嘗試啟用畫中畫 (如果處於畫中畫模式)
-             if (document.pictureInPictureEnabled && !e.target.disablePictureInPicture) {
-               // 等待影片準備好
-             }
+        playerRef.current = new window.YT.Player('yt-player', {
+          height: '100%',
+          width: '100%',
+          videoId: videoId,
+          playerVars: {
+            'autoplay': 1,
+            'controls': 0,
+            'playsinline': 1,
+            'disablekb': 1,
+            'fs': 0,
+            'rel': 0,
+            'iv_load_policy': 3
+          },
+          events: {
+            'onStateChange': onStateChange,
+            'onReady': (e) => {
+               setDuration(e.target.getDuration());
+               e.target.setVolume(volume);
+               e.target.playVideo();
+            }
           }
-        }
+        });
       });
     }
 
     return () => {
+      clearTimeout(timer);
       if (progressInterval.current) clearInterval(progressInterval.current);
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
     };
   }, [isApiReady, videoId, audio]);
 
