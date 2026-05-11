@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getYouTubeID, getYouTubeThumbnail, getVideoUrl, getVideoTitle } from './utils/youtube';
+import { formatDate, formatDuration } from './utils/format';
+import { arrayToCSV, csvToArray } from './utils/csv';
 import { 
   Play, 
   Shuffle, 
@@ -116,96 +119,16 @@ try {
 
 // --- 工具函數 ---
 const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9);
-const getYouTubeID = (url) => {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-};
 
-const getYouTubeThumbnail = (url) => {
-  const videoId = getYouTubeID(url);
-  return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null;
-};
 
-const formatDate = (timestamp) => {
-  if (!timestamp) return '';
-  try {
-    return new Date(timestamp).toLocaleString('zh-TW', {
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-    });
-  } catch (e) {
-    return '';
-  }
-};
-const formatDuration = (seconds) => {
-  if (!seconds || isNaN(seconds)) return "00:00";
-  const min = Math.floor(seconds / 60);
-  const sec = Math.floor(seconds % 60);
-  return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
-};
+;
 
-const getVideoUrl = (item) => {
-  if (!item) return '';
-  return typeof item === 'string' ? item : item.url;
-};
-const getVideoTitle = (item) => {
-  if (!item) return '';
-  if (typeof item === 'string') return item;
-  return item.title && item.title.trim() !== '' ? item.title : item.url;
-};
+
 
 // Fisher-Yates 洗牌演算法
-const shuffleArray = (array) => {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-};
 
 // --- CSV ---
-const arrayToCSV = (items) => {
-  const headers = ['id', 'type', 'title', 'description', 'url', 'urls', 'createdAt', 'visits', 'downloads'];
-  const csvRows = items.map(item => {
-    return headers.map(header => {
-      let val = item[header];
-      if (header === 'urls') val = JSON.stringify(val || []); 
-      if (val === undefined || val === null) val = '';
-      const stringVal = String(val).replace(/"/g, '""');
-      return `"${stringVal}"`;
-    }).join(',');
-  });
-  return [headers.join(','), ...csvRows].join('\n');
-};
-const csvToArray = (csvText) => {
-  const lines = csvText.trim().split(/\r\n|\n/);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const result = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
-    const values = [];
-    let match;
-    while ((match = regex.exec(line)) !== null) {
-      if (match[1] !== undefined) values.push(match[1].replace(/""/g, '"'));
-      else values.push(match[2]);
-    }
-    if (values.length === 0) continue;
-    const obj = {};
-    headers.forEach((header, index) => {
-      let val = values[index];
-      if (val === undefined) val = '';
-      if (header === 'urls') { try { val = JSON.parse(val); } catch(e) { val = []; } } 
-      else if (['createdAt', 'visits', 'downloads'].includes(header)) val = Number(val) || 0;
-      obj[header] = val;
-    });
-    if (obj.title || obj.url) result.push(obj);
-  }
-  return result;
-};
+
 
 // --- UI ---
 const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleTheme, autoDarkMode, setAutoDarkMode }) => (
