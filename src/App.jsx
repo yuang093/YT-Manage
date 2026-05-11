@@ -1006,7 +1006,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     return () => {
       if (progressInterval.current) clearInterval(progressInterval.current);
     };
-  }, [isApiReady, videoId]);
+  }, [isApiReady, videoId, audio]);
 
   const togglePlay = () => {
     if (!playerRef.current || typeof playerRef.current.getPlayerState !== 'function') return;
