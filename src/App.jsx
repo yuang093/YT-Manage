@@ -259,7 +259,6 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
   </nav>
 );
 
-
 // ==================== 排序下拉選單 ====================
 const SortDropdown = ({ sortBy, sortOrder, onSortChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -514,7 +513,6 @@ const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, tog
             )}
           </div>
         )}
-
 
         {filteredItems.length === 0 ? (
           <div className="p-12 text-center text-gray-500 dark:text-gray-400">{renderEmptyState()}</div>
@@ -1002,8 +1000,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
   // audio 模式切換偵錯
   useEffect(() => {
-    console.log('[Audio Mode] changed to:', audio);
-  }, [audio]);
+      }, [audio]);
 
   // audio 模式切換：使用 CSS opacity 控制顯示
   useEffect(() => {
