@@ -924,102 +924,83 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   }, [playbackSpeed]);
 
-  // 初始化播放器
+  // 初始化播放器 (只在 videoId 改變時建立)
   useEffect(() => {
-    console.log('[Player useEffect] trigger - audio:', audio, 'isApiReady:', isApiReady, 'videoId:', videoId);
-    if (isApiReady && videoId && containerRef.current) {
-      console.log('[Player useEffect] creating player, audio mode:', audio);
-      
-      // 摧毀舊播放器
+    if (!isApiReady || !videoId || !containerRef.current) return;
+    console.log('[Player] Initializing with videoId:', videoId);
+
+    // 延遲建立，確保 DOM 準備好
+    const timer = setTimeout(() => {
       if (playerRef.current) {
-        console.log('[Player] destroying existing player');
         playerRef.current.destroy();
         playerRef.current = null;
       }
-
-      // 延遲建立新播放器，確保 DOM 已更新
-      const timer = setTimeout(() => {
-        console.log('[Player] setTimeout fired, creating YT.Player');
 
       const onStateChange = (event) => {
         if (event.data === window.YT.PlayerState.PLAYING) {
           setIsPlaying(true);
           setDuration(playerRef.current.getDuration());
-          if(progressInterval.current) clearInterval(progressInterval.current);
+          if (progressInterval.current) clearInterval(progressInterval.current);
           progressInterval.current = setInterval(() => {
-             setCurrentTime(playerRef.current.getCurrentTime());
-        // 追蹤播放時間
-        setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
+            setCurrentTime(playerRef.current.getCurrentTime());
+            setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
           }, 1000);
         } else {
           if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
           if (event.data === window.YT.PlayerState.ENDED) {
-             setIsPlaying(false);
-             // 循環模式處理
-             if (loopMode === 'one') {
-               if (playerRef.current?.seekTo) {
-                 playerRef.current.seekTo(0);
-                 playerRef.current.playVideo();
-               }
-             } else if (loopMode === 'all' && playlist.length > 0) {
-               // 列表循環 - 回到第一首
-               if (currentIndex === playlist.length - 1) {
-                 setCurrentIndex(0);
-                 setVideoId(playlist[0]?.videoId);
-               } else if (nextRef.current) {
-                 nextRef.current();
-               }
-             } else if (nextRef.current) {
-               // 3. 行動裝置連續播放 (自動觸發)
-               nextRef.current(); 
-             }
+            setIsPlaying(false);
+            if (loopMode === 'one' && playerRef.current?.seekTo) {
+              playerRef.current.seekTo(0);
+              playerRef.current.playVideo();
+            } else if (nextRef.current) {
+              nextRef.current();
+            }
           }
           clearInterval(progressInterval.current);
         }
       };
 
-        // 調試：確認 yt-player div 存在
-        const playerDiv = document.getElementById('yt-player');
-        console.log('[DEBUG] yt-player div:', playerDiv, 'audio:', audio);
-        console.log('[DEBUG] Creating YT.Player with videoId:', videoId);
-        
-        playerRef.current = new window.YT.Player('yt-player', {
-          height: '100%',
-          width: '100%',
-          videoId: videoId,
-          playerVars: {
-            'autoplay': 1,
-            'controls': 0,
-            'playsinline': 1,
-            'disablekb': 1,
-            'fs': 0,
-            'rel': 0,
-            'iv_load_policy': 3
-          },
-          events: {
-            'onStateChange': onStateChange,
-            'onError': (e) => {
-              console.error('[YT Player Error]', e);
-            },
-            'onReady': (e) => {
-               setDuration(e.target.getDuration());
-               e.target.setVolume(volume);
-               e.target.playVideo();
-            }
+      playerRef.current = new window.YT.Player('yt-player', {
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          'autoplay': 1,
+          'controls': 0,
+          'playsinline': 1,
+          'disablekb': 1,
+          'fs': 0,
+          'rel': 0,
+          'iv_load_policy': 3
+        },
+        events: {
+          'onStateChange': onStateChange,
+          'onError': (e) => console.error('[YT Player Error]', e),
+          'onReady': (e) => {
+            setDuration(e.target.getDuration());
+            e.target.setVolume(volume);
+            e.target.playVideo();
           }
-        });
+        }
       });
-    }
+    }, 100);
 
     return () => {
       clearTimeout(timer);
       if (progressInterval.current) clearInterval(progressInterval.current);
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
     };
-  }, [isApiReady, videoId, audio]);
+  }, [isApiReady, videoId]);
+
+  // audio 模式切換：只切換 iframe 顯示，不摧毀播放器
+  useEffect(() => {
+    console.log('[Audio Mode] audio =', audio);
+    const iframe = document.querySelector('#yt-player iframe');
+    console.log('[Audio Mode] iframe found:', iframe);
+    if (iframe) {
+      iframe.style.display = audio ? 'none' : 'block';
+      console.log('[Audio Mode] iframe display set to:', audio ? 'none' : 'block');
+    }
+  }, [audio]);
 
   const togglePlay = () => {
     if (!playerRef.current || typeof playerRef.current.getPlayerState !== 'function') return;
@@ -1304,7 +1285,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       {/* 播放器容器 (3. 純音樂模式自動縮小) */}
       <div ref={containerRef} className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-500 ease-in-out ${audio ? 'h-32' : 'aspect-video'}`}>
          {/* API 掛載點 - 始終存在，控制 opacity 隱藏 */}
-         <div id="yt-player" className={`w-full h-full absolute inset-0 ${audio ? 'opacity-0' : 'opacity-100'}`}></div>
+         <div id="yt-player" style={{ display: audio ? 'none' : 'block' }} className="w-full h-full absolute inset-0"></div>
          
          {/* Audio 遮罩 */}
          <div className={`absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white pointer-events-none transition-opacity duration-300 ${audio ? 'opacity-100' : 'opacity-0'}`}>
