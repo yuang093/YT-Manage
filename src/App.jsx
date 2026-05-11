@@ -926,15 +926,20 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
   // 初始化播放器
   useEffect(() => {
+    console.log('[Player useEffect] trigger - audio:', audio, 'isApiReady:', isApiReady, 'videoId:', videoId);
     if (isApiReady && videoId && containerRef.current) {
-      // 每次 (包括 audio 模式切換) 都摧毀舊播放器重建
+      console.log('[Player useEffect] creating player, audio mode:', audio);
+      
+      // 摧毀舊播放器
       if (playerRef.current) {
+        console.log('[Player] destroying existing player');
         playerRef.current.destroy();
         playerRef.current = null;
       }
 
       // 延遲建立新播放器，確保 DOM 已更新
       const timer = setTimeout(() => {
+        console.log('[Player] setTimeout fired, creating YT.Player');
 
       const onStateChange = (event) => {
         if (event.data === window.YT.PlayerState.PLAYING) {
@@ -973,6 +978,11 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         }
       };
 
+        // 調試：確認 yt-player div 存在
+        const playerDiv = document.getElementById('yt-player');
+        console.log('[DEBUG] yt-player div:', playerDiv, 'audio:', audio);
+        console.log('[DEBUG] Creating YT.Player with videoId:', videoId);
+        
         playerRef.current = new window.YT.Player('yt-player', {
           height: '100%',
           width: '100%',
@@ -988,6 +998,9 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           },
           events: {
             'onStateChange': onStateChange,
+            'onError': (e) => {
+              console.error('[YT Player Error]', e);
+            },
             'onReady': (e) => {
                setDuration(e.target.getDuration());
                e.target.setVolume(volume);
