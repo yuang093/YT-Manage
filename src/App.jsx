@@ -1294,7 +1294,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       {/* 播放器容器 (3. 純音樂模式自動縮小) */}
       <div ref={containerRef} className={`relative rounded-xl overflow-hidden shadow-2xl bg-black transition-all duration-500 ease-in-out ${audio ? 'h-32' : 'aspect-video'}`}>
          {/* API 掛載點 - 始終存在，控制 opacity 隱藏 */}
-         <div id="yt-player" style={{ display: audio ? 'none' : 'block' }} className="w-full h-full absolute inset-0"></div>
+         <div id="yt-player"  className="w-full h-full absolute inset-0"></div>
          
          {/* Audio 遮罩 */}
          <div className={`absolute inset-0 z-10 bg-gray-900 flex flex-col items-center justify-center text-white pointer-events-none transition-opacity duration-300 ${audio ? 'opacity-100' : 'opacity-0'}`}>
