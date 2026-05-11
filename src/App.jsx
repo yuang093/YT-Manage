@@ -942,7 +942,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         if (progressInterval.current) clearInterval(progressInterval.current);
         progressInterval.current = setInterval(() => {
           if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') { setCurrentTime(playerRef.current.getCurrentTime()); }
-          setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
+          setTotalStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
         }, 1000);
       } else {
         if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
