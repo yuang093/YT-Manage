@@ -933,7 +933,6 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     console.log('[Player] Setting up timer, containerRef:', containerRef.current);
     const timer = setTimeout(() => {
       console.log('[Player] Timer fired, creating player');
-      try {
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
