@@ -941,7 +941,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         setDuration(playerRef.current.getDuration());
         if (progressInterval.current) clearInterval(progressInterval.current);
         progressInterval.current = setInterval(() => {
-          setCurrentTime(playerRef.current.getCurrentTime());
+          if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') { setCurrentTime(playerRef.current.getCurrentTime()); }
           setStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
         }, 1000);
       } else {
