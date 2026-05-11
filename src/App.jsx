@@ -962,10 +962,12 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         }
       };
 
-      playerRef.current = new window.YT.Player('yt-player', {
-        height: '100%',
-        width: '100%',
-        videoId: videoId,
+      console.log('[Player] Before creating YT.Player');
+      try {
+        playerRef.current = new window.YT.Player('yt-player', {
+          height: '100%',
+          width: '100%',
+          videoId: videoId,
         playerVars: {
           'autoplay': 1,
           'controls': 0,
@@ -985,6 +987,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           }
         }
       });
+      console.log('[Player] After creating YT.Player, playerRef:', playerRef.current);
+      } catch (e) {
+        console.error('[Player] Error creating player:', e);
+      }
     }, 100);
 
     return () => {
