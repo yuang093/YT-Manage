@@ -988,8 +988,14 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }, 100);
 
     return () => {
+      console.log('[Player] Cleanup - timer cleared');
       clearTimeout(timer);
       if (progressInterval.current) clearInterval(progressInterval.current);
+      if (playerRef.current) {
+        console.log('[Player] Cleanup - destroying player');
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
     };
   }, [isApiReady, videoId]);
 
