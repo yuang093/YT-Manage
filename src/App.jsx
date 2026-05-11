@@ -930,7 +930,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     console.log('[Player] Initializing with videoId:', videoId);
 
     // 延遲建立，確保 DOM 準備好
+    console.log('[Player] Setting up timer, containerRef:', containerRef.current);
     const timer = setTimeout(() => {
+      console.log('[Player] Timer fired, creating player');
+      try {
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
