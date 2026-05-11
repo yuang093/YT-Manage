@@ -1005,15 +1005,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     };
   }, [isApiReady, videoId]);
 
-  // audio 模式切換：只切換 iframe 顯示，不摧毀播放器
+  // audio 模式切換：使用 CSS opacity 控制顯示
   useEffect(() => {
     console.log('[Audio Mode] audio =', audio);
-    const iframe = document.querySelector('#yt-player iframe');
-    console.log('[Audio Mode] iframe found:', iframe);
-    if (iframe) {
-      iframe.style.display = audio ? 'none' : 'block';
-      console.log('[Audio Mode] iframe display set to:', audio ? 'none' : 'block');
-    }
+    // CSS opacity 控制會由 class 處理，這裡只是偵錯
   }, [audio]);
 
   const togglePlay = () => {
