@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Music, Youtube, SkipBack, Play, Pause, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Maximize2, Minimize2, Timer, HelpCircle, BarChart2, Mic, Search, X, Clock, ExternalLink, Gauge, List, Monitor, Settings, Share } from 'lucide-react';
-import { getYouTubeID, getVideoUrl, getVideoTitle, getYouTubeThumbnail } from '../../utils/youtube';
+import { Play, Shuffle, SkipForward, SkipBack, Plus, List, Settings, Trash2, Edit, Download, Upload, ExternalLink, Eye, Youtube, Lock, LogOut, X, Music, CheckSquare, Square, Cloud, HardDrive, ShieldAlert, Loader2, CheckCircle, Pause, Maximize2, Minimize2, Volume2, VolumeX, User, Search, Sun, Moon, Heart, Clock, PlayCircle, Zap, TrendingUp, TrendingDown, Repeat, Repeat1, Gauge, Timer, History, ArrowUpDown, Trash, Monitor, Share2, Mic, BarChart2, HelpCircle } from 'lucide-react';
+import { getYouTubeID, getYouTubeThumbnail, getVideoUrl, getVideoTitle } from '../../utils/youtube';
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
   const [shuffle, setShuffle] = useState(true); 
@@ -901,7 +901,5 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 flex space-x-4"><span>累積訪問: {item.visits || 0}</span><span>累積下載: {item.downloads || 0}</span></div>
       </div>
     </div>
-  );
-};
 
 export default PlayerView;
