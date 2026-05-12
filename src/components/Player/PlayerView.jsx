@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
   const [shuffle, setShuffle] = useState(true); 
