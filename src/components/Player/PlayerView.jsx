@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getYouTubeID, getVideoUrl } from '../../utils/youtube';
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
   const [shuffle, setShuffle] = useState(true); 

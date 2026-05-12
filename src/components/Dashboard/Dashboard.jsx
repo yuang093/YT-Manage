@@ -101,7 +101,7 @@ export const Dashboard = ({ items, viewItem, isLoading, permissionError, favorit
           sortBy={sortBy}
           sortOrder={sortOrder}
           onSortChange={(by, order) => { setSortBy(by); setSortOrder(order); }}
-          showHistory={showHistory}
+          showHistory={showHistory} setShowHistory={setShowHistory}
           historyLength={playHistory?.length || 0}
         />
         

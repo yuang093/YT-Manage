@@ -24,7 +24,7 @@ export const FilterBar = ({ filter, setFilter, searchTerm, setSearchTerm, sortBy
       
       {/* 歷史記錄按鈕 */}
       <button
-        onClick={showHistory}
+        onClick={() => setShowHistory(!showHistory)}
         className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center transition-all duration-200 ${
           showHistory 
             ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md' 
