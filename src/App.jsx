@@ -909,7 +909,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
     return () => {
       console.log('[Player] Cleanup');
-      clearTimeout(timer);
+      
       // 先清除 interval，再摧毀 player
       if (progressInterval.current) {
         clearInterval(progressInterval.current);
