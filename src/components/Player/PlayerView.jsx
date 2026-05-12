@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Music, Youtube, SkipBack, Play, Pause, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Maximize2, Minimize2, Timer, HelpCircle, BarChart2, Mic, Search, X } from 'lucide-react';
+import { Music, Youtube, SkipBack, Play, Pause, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Maximize2, Minimize2, Timer, HelpCircle, BarChart2, Mic, Search, X, Clock, ExternalLink, Gauge, List, Monitor, Settings, Share } from 'lucide-react';
 import { getYouTubeID, getVideoUrl, getVideoTitle, getYouTubeThumbnail } from '../../utils/youtube';
 const PlayerView = ({ item, setView, recordDownload }) => {
   const [idx, setIdx] = useState(0);
