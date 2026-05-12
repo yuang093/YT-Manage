@@ -68,7 +68,7 @@ import CreatePage from './components/Form/CreatePage';
 import EditPage from './components/Form/EditPage';
 import AdminPanel from './components/Admin/AdminPanel';
 import LoginView from './components/Login/LoginView';
-// import PlayerView from './components/Player/PlayerView';
+import PlayerView from './components/Player/PlayerView';
 
 // --- 全局動畫樣式 ---
 const styleEl = document.createElement('style');
