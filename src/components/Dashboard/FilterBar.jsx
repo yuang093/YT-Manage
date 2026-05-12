@@ -2,7 +2,7 @@
 import { Search, X, History } from 'lucide-react';
 import SortDropdown from './SortDropdown';
 
-export const FilterBar = ({ filter, setFilter, searchTerm, setSearchTerm, sortBy, sortOrder, onSortChange, showHistory, historyLength }) => (
+export const FilterBar = ({ filter, setFilter, searchTerm, setSearchTerm, sortBy, sortOrder, onSortChange, showHistory, setShowHistory, historyLength }) => (
   <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-4">
     <div className="flex items-center space-x-2">
       {/* 類型篩選 */}
