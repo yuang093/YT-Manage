@@ -61,6 +61,7 @@ import {
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import Header from './components/Header/Header';
 
 // --- 全局動畫樣式 ---
 const styleEl = document.createElement('style');
