@@ -160,6 +160,15 @@ const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleT
             {autoDarkMode ? <Clock size={16} /> : <Clock size={16} className="opacity-50"/>}
           </button>
           
+          <a
+            href="https://service.jkopay.com/r/transfer?j=Transfer:901055756"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-yellow-500 hover:bg-yellow-600 text-gray-900 flex items-center transition-colors"
+            title="斗內"
+          >
+            <Heart className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">斗內</span>
+          </a>
           <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
             <Plus className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">新增頁面</span>
           </button>
