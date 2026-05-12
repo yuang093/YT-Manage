@@ -33,7 +33,7 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             href="https://service.jkopay.com/r/transfer?j=Transfer:901055756" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="px-3 py-2 rounded-md text-sm font-medium bg-pink-500 hover:bg-pink-600 flex items-center transition-colors"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-yellow-500 hover:bg-yellow-600 text-gray-900 flex items-center transition-colors"
             title="斗內"
           >
             <Heart className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">斗內</span>
