@@ -61,7 +61,6 @@ import {
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
-import Header from './components/Header/Header';
 
 // --- 全局動畫樣式 ---
 const styleEl = document.createElement('style');
@@ -133,6 +132,115 @@ const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random()
 
 
 // --- UI ---
+const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleTheme, autoDarkMode, setAutoDarkMode }) => (
+  <nav className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 dark:from-red-900 dark:via-red-800 dark:to-red-900 text-white shadow-lg transition-all duration-300">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between h-16">
+        <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
+          <div className="relative">
+            <Youtube className="w-8 h-8 mr-2" />
+            <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
+          </div>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V16</span>
+          {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
+        </div>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={toggleTheme} 
+            className="p-2 rounded-full hover:bg-red-700 dark:hover:bg-red-800 transition-colors focus:outline-none"
+            title={isDarkMode ? "切換亮色模式" : "切換深色模式"}
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <button 
+            onClick={() => setAutoDarkMode(a => !a)} 
+            className={`p-2 rounded-full transition-colors focus:outline-none ${autoDarkMode ? 'bg-purple-600 text-white' : 'hover:bg-red-700 dark:hover:bg-red-800'}`}
+            title={autoDarkMode ? "自動深夜模式: 開 (22:00-06:00 強制暗色)" : "自動深夜模式: 關"}
+          >
+            {autoDarkMode ? <Clock size={16} /> : <Clock size={16} className="opacity-50"/>}
+          </button>
+          
+          <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
+            <Plus className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">新增頁面</span>
+          </button>
+          {isAdmin ? (
+            <div className="flex items-center space-x-2">
+               <button onClick={() => setView('admin')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
+                <Settings className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">後台</span>
+              </button>
+              <button onClick={handleLogout} className="px-3 py-2 rounded-md text-sm font-medium bg-red-800 dark:bg-red-950 hover:bg-red-900 dark:hover:bg-red-900 flex items-center transition-colors">
+                <LogOut className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">登出</span>
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setView('login')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
+              <Lock className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">管理員</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  </nav>
+);
+
+// ==================== 排序下拉選單 ====================
+const SortDropdown = ({ sortBy, sortOrder, onSortChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const sortOptions = [
+    { value: 'createdAt', label: '建立時間', icon: Clock },
+    { value: 'visits', label: '訪問量', icon: Eye },
+    { value: 'downloads', label: '下載量', icon: Download },
+    { value: 'title', label: '標題', icon: ArrowUpDown },
+  ];
+  
+  const currentOption = sortOptions.find(o => o.value === sortBy) || sortOptions[0];
+  const CurrentIcon = currentOption.icon;
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+      >
+        <ArrowUpDown size={16} className="mr-2 text-gray-500" />
+        <CurrentIcon size={14} className="mr-1" />
+        <span>{sortOrder === 'desc' ? '↓' : '↑'}</span>
+        <span className="ml-1">{currentOption.label}</span>
+      </button>
+      
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+          {sortOptions.map(option => {
+            const OptionIcon = option.icon;
+            return (
+              <button
+                key={option.value}
+                onClick={() => {
+                  if (sortBy === option.value) {
+                    onSortChange(option.value, sortOrder === 'desc' ? 'asc' : 'desc');
+                  } else {
+                    onSortChange(option.value, 'desc');
+                  }
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+                  sortBy === option.value ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20' : 'text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <OptionIcon size={14} className="mr-2" />
+                {option.label}
+                {sortBy === option.value && (
+                  <span className="ml-auto">{sortOrder === 'desc' ? '↓' : '↑'}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, toggleFavorite, playHistory, onPlayFromHistory }) => {
   const [filter, setFilter] = useState('all'); 
