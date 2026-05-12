@@ -1568,10 +1568,6 @@ const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport,
   );
 };
 
-const LoginView = ({ onLogin, setView }) => {
-  const [p, setP] = useState('');
-  return <div className="flex justify-center py-12"><div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded shadow-lg transition-colors"><div><h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">管理員登入</h2></div><form className="mt-8 space-y-6" onSubmit={e=>{e.preventDefault();onLogin(p)}}><div className="rounded-md shadow-sm -space-y-px"><div><label htmlFor="password" className="sr-only">Password</label><input id="password" name="password" type="password" required className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-700" placeholder="請輸入管理密碼" value={p} onChange={e=>setP(e.target.value)} /></div></div><div><button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">登入</button></div><div className="text-center mt-2"><button type="button" onClick={()=>setView('home')} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">返回首頁</button></div></form></div></div>;
-};
 
 // --- App ---
 export default function App() {
