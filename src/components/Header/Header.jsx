@@ -1,5 +1,5 @@
 // Header 元件
-import { Youtube, Zap, Sun, Moon, Clock, Plus, Settings, LogOut, Lock, Loader2 } from 'lucide-react';
+import { Youtube, Zap, Sun, Moon, Clock, Plus, Settings, LogOut, Lock, Loader2, Heart } from 'lucide-react';
 
 export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, toggleTheme, autoDarkMode, setAutoDarkMode }) => (
   <nav className="bg-gradient-to-r from-red-600 via-red-700 to-red-800 dark:from-red-900 dark:via-red-800 dark:to-red-900 text-white shadow-lg transition-all duration-300">
@@ -28,6 +28,16 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
           >
             {autoDarkMode ? <Clock size={16} /> : <Clock size={16} className="opacity-50"/>}
           </button>
+          
+          <a 
+            href="https://service.jkopay.com/r/transfer?j=Transfer:901055756" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="px-3 py-2 rounded-md text-sm font-medium bg-pink-500 hover:bg-pink-600 flex items-center transition-colors"
+            title="斗內"
+          >
+            <Heart className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">斗內</span>
+          </a>
           
           <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
             <Plus className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">新增頁面</span>
