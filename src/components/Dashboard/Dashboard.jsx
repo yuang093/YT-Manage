@@ -4,6 +4,7 @@ import { ShieldAlert, Loader2 } from 'lucide-react';
 import StatsCards from './StatsCards';
 import FilterBar from './FilterBar';
 import ItemList from './ItemList';
+import { SkeletonDashboard } from './Skeleton';
 import { formatDate } from '../../utils/format';
 
 export const Dashboard = ({ items, viewItem, isLoading, permissionError, favorites, toggleFavorite, playHistory, onPlayFromHistory }) => {
@@ -73,14 +74,7 @@ export const Dashboard = ({ items, viewItem, isLoading, permissionError, favorit
         </div>
       );
     }
-    if (isLoading) return (
-      <div className="flex items-center justify-center text-gray-500 dark:text-gray-400 p-8">
-        <div className="animate-pulse flex flex-col items-center">
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-2"></div>
-          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-48"></div>
-        </div>
-      </div>
-    );
+    if (isLoading) return <SkeletonDashboard />;
     if (safeItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">目前雲端資料庫是空的，請點擊右上角「新增頁面」開始建立。</div>;
     if (filteredItems.length === 0) return <div className="text-gray-500 dark:text-gray-400">找不到符合「{searchTerm}」的資料。</div>;
     return <div className="text-gray-500 dark:text-gray-400">此分類目前沒有資料。</div>;
