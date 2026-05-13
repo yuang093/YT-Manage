@@ -10,7 +10,7 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V18.3</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V18.4</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -43,7 +43,7 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             {/* 底部發光 */}
             <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-green-400 blur-sm opacity-60 group-hover:opacity-100 transition-opacity"></span>
             {/* 按鈕內容 */}
-            <span className="relative z-10 flex items-center text-green-50 font-bold tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+            <span className="relative z-10 flex items-center text-green-900 font-bold tracking-wide">
               <Heart className="w-4 h-4 mr-1 animate-pulse" />
               <span className="hidden sm:inline">斗內</span>
             </span>
