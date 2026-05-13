@@ -17,8 +17,10 @@ export const useHistory = () => {
 
   const addToHistory = (item) => {
     setPlayHistory((prev) => {
-      const filtered = prev.filter((h) => h.id !== item.id);
-      const newHistory = [item, ...filtered].slice(0, 20);
+      const newHistory = [
+        { id: item.id, playedAt: Date.now() },
+        ...prev.filter((h) => h.id !== item.id)
+      ].slice(0, 20);
       localStorage.setItem('yt_play_history', JSON.stringify(newHistory));
       return newHistory;
     });

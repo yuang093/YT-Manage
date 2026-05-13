@@ -62,6 +62,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import SortDropdown from './components/Dashboard/SortDropdown';
 import Dashboard from './components/Dashboard/Dashboard';
+import { useFavorites } from './hooks/useFavorites';
+import { useHistory } from './hooks/useHistory';
 import AdminPanel from './components/Admin/AdminPanel';
 import LoginView from './components/Login/LoginView';
 import Header from './components/Header/Header';
@@ -1056,55 +1058,17 @@ export default function App() {
   // 6. 訪客計數 (LocalStorage 模擬)
   const [visitorCount, setVisitorCount] = useState(0);
   
-  // 新功能：播放歷史
-  const [playHistory, setPlayHistory] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return JSON.parse(localStorage.getItem('yt_play_history') || '[]');
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
-  });
+  // 播放歷史
+  const { playHistory, addToHistory, clearHistory } = useHistory();
+
+  // 從歷史記錄播放
+  const handlePlayFromHistory = (item) => { addToHistory(item); setActiveItem(item); setView('view'); };
   
-  // 新功能：添加播放歷史
-  const addToHistory = (item) => {
-    const newHistory = [
-      { id: item.id, playedAt: Date.now() },
-      ...playHistory.filter(h => h.id !== item.id)
-    ].slice(0, 20);
-    setPlayHistory(newHistory);
-    localStorage.setItem('yt_play_history', JSON.stringify(newHistory));
-  };
   
-  // 新功能：從歷史記錄播放
-  const handlePlayFromHistory = (item) => {
-    addToHistory(item);
-    setActiveItem(item);
-    setView('view');
-  };
   
   // 收藏功能
-  const [favorites, setFavorites] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return JSON.parse(localStorage.getItem('yt_favorites') || '[]');
-    }
-    return [];
-  });
-  
-  // 切換收藏
-  const toggleFavorite = (itemId) => {
-    let newFavorites;
-    if (favorites.includes(itemId)) {
-      newFavorites = favorites.filter(id => id !== itemId);
-    } else {
-      newFavorites = [...favorites, itemId];
-    }
-    setFavorites(newFavorites);
-    localStorage.setItem('yt_favorites', JSON.stringify(newFavorites));
-  };
-  
+  const { favorites, toggleFavorite } = useFavorites();
+
   // 深色模式狀態
   const [autoDarkMode, setAutoDarkMode] = useState(() => {
     return localStorage.getItem('yt_auto_dark_mode') !== 'false';
