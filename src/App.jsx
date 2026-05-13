@@ -62,6 +62,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import SortDropdown from './components/Dashboard/SortDropdown';
 import Dashboard from './components/Dashboard/Dashboard';
+import AdminPanel from './components/Admin/AdminPanel';
+import LoginView from './components/Login/LoginView';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 // --- 全局動畫樣式 ---
@@ -1273,73 +1275,6 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       </div>
     </div>
   );
-};
-
-const AdminPanel = ({ items, handleDelete, openEdit, handleImport, handleExport, handleBatchDelete }) => {
-  // 新功能：批量刪除狀態
-  const [selectedIds, setSelectedIds] = useState([]);
-  return (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden transition-colors">
-    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 border-b border-blue-100 dark:border-blue-900/30 flex justify-between">
-       <div className="flex gap-4 text-xs font-bold text-blue-800 dark:text-blue-300 items-center">
-         <span className="flex items-center text-green-600 dark:text-green-400"><Cloud size={12} className="mr-1"/> 雲端模式</span>
-         <span className="flex items-center text-green-600 dark:text-green-400"><CheckCircle size={12} className="mr-1"/> 連線正常</span>
-         <span className="text-gray-400 dark:text-gray-500 font-mono">ID: yt-manager-global</span>
-       </div>
-    </div>
-    <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-    <h2 className="text-xl font-bold flex items-center text-gray-800 dark:text-white"><List className="mr-2"/> 管理</h2>
-    {selectedIds.length > 0 && (
-      <button 
-        onClick={() => {
-          if (confirm(`確定刪除已選取的 ${selectedIds.length} 項目？`)) {
-            handleBatchDelete(selectedIds);
-            setSelectedIds([]);
-          }
-        }}
-        className="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center hover:bg-red-200 dark:hover:bg-red-900/50"
-      >
-        <Trash size={14} className="mr-1" />
-        刪除已選 ({selectedIds.length})
-      </button>
-    )}
-    <div className="flex gap-2"><label className="cursor-pointer px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-700 dark:text-gray-300"><Upload size={16} className="mr-2"/> 匯入<input type="file" className="hidden" accept=".csv" onChange={handleImport}/></label><button onClick={handleExport} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center text-gray-700 dark:text-gray-300"><Download size={16} className="mr-2"/> 匯出</button></div></div>
-    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"><thead className="bg-gray-50 dark:bg-gray-700"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-8">
-              <input 
-                type="checkbox" 
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedIds(items.map(i => i.id));
-                  } else {
-                    setSelectedIds([]);
-                  }
-                }}
-                checked={selectedIds.length === items.length && items.length > 0}
-                className="rounded border-gray-300"
-              />
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">標題</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">類型</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">數據</th><th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th></tr></thead><tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">{items.map(i=>(<tr key={i.id}><td className="px-4 py-4">
-              <input 
-                type="checkbox" 
-                checked={selectedIds.includes(i.id)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedIds([...selectedIds, i.id]);
-                  } else {
-                    setSelectedIds(selectedIds.filter(id => id !== i.id));
-                  }
-                }}
-                className="rounded border-gray-300"
-              />
-            </td>
-            <td className="px-6 py-4"><div className="text-sm font-medium text-gray-900 dark:text-white">{i.title}</div></td><td className="px-6 py-4"><span className={`px-2 text-xs rounded-full ${i.type==='playlist'?'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400':'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'}`}>{i.type==='playlist'?'清單':'單曲'}</span></td><td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{i.visits||0}/{i.downloads||0}</td><td className="px-6 py-4 text-right space-x-2"><button onClick={()=>openEdit(i)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"><Edit size={16}/></button><button onClick={()=>handleDelete(i.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"><Trash2 size={16}/></button></td></tr>))}</tbody></table>
-  </div>
-  );
-};
-
-const LoginView = ({ onLogin, setView }) => {
-  const [p, setP] = useState('');
-  return <div className="flex justify-center py-12"><div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded shadow-lg transition-colors"><div><h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">管理員登入</h2></div><form className="mt-8 space-y-6" onSubmit={e=>{e.preventDefault();onLogin(p)}}><div className="rounded-md shadow-sm -space-y-px"><div><label htmlFor="password" className="sr-only">Password</label><input id="password" name="password" type="password" required className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-red-500 focus:border-red-500 focus:z-10 sm:text-sm bg-white dark:bg-gray-700" placeholder="請輸入管理密碼" value={p} onChange={e=>setP(e.target.value)} /></div></div><div><button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">登入</button></div><div className="text-center mt-2"><button type="button" onClick={()=>setView('home')} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">返回首頁</button></div></form></div></div>;
 };
 
 // --- App ---
