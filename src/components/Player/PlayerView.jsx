@@ -718,7 +718,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
          </div>
 
          {/* 次要功能列 - 第二行：辅助功能 */}
-         <div className="flex items-center justify-between flex-wrap gap-2 border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+         <div className="flex items-center justify-between flex-wrap gap-2 mt-3 pt-3 border-t-2 border-gray-300 dark:border-gray-600">
              {/* 左側：播放器狀態 */}
              <div className="text-xs text-gray-500 dark:text-gray-400">
                {isPiP && <span className="mr-2">📺 畫中畫</span>}
