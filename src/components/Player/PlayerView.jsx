@@ -901,5 +901,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 flex space-x-4"><span>累積訪問: {item.visits || 0}</span><span>累積下載: {item.downloads || 0}</span></div>
       </div>
     </div>
+  );
+};
 
 export default PlayerView;
