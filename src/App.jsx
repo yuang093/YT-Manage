@@ -1018,6 +1018,53 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                )}
              </div>
          </div>
+
+         {/* 手機版第二行：橫向滾動 */}
+         <div className="sm:hidden flex items-center gap-1 overflow-x-auto pb-1" style={{WebkitOverflowScrolling: 'touch'}}>
+             <div className="flex items-center space-x-0.5 flex-nowrap">
+               <button onClick={togglePiP} className={`p-1.5 rounded-full transition flex-shrink-0 ${isPiP ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="畫中畫">
+                 <Monitor size={16}/>
+               </button>
+               <button onClick={shareVideo} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition flex-shrink-0" title="分享">
+                 <Share2 size={16}/>
+               </button>
+               <button onClick={() => { setShowLyrics(!showLyrics); if (!showLyrics && lyrics.includes('點擊上方按鈕')) searchLyrics(); }} className={`p-1.5 rounded-full transition flex-shrink-0 ${showLyrics ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="歌詞">
+                 <Mic size={16}/>
+               </button>
+               <button onClick={() => setShowStats(!showStats)} className={`p-1.5 rounded-full transition flex-shrink-0 ${showStats ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="統計">
+                 <BarChart2 size={16}/>
+               </button>
+               <button onClick={() => setShowHelp(!showHelp)} className={`p-1.5 rounded-full transition flex-shrink-0 ${showHelp ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="說明">
+                 <HelpCircle size={16}/>
+               </button>
+               <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5 flex-shrink-0"></div>
+               <button className="p-1.5 text-gray-400 dark:text-gray-500 flex items-center text-xs flex-shrink-0">
+                 <Gauge size={14} className="mr-0.5" />{playbackSpeed}
+               </button>
+               {availableQualities.length > 0 && (
+                 <button className="p-1.5 text-gray-400 dark:text-gray-500 flex items-center text-xs flex-shrink-0">
+                   <Settings size={14} className="mr-0.5" />HD
+                 </button>
+               )}
+               <button className={`p-1.5 rounded-full flex items-center text-xs flex-shrink-0 ${sleepTimer > 0 ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500'}`} title="定時">
+                 <Timer size={14} />
+               </button>
+               {item.type === 'playlist' && (
+                 <>
+                   <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5 flex-shrink-0"></div>
+                   <button onClick={() => setShuffle(!shuffle)} className={`p-1.5 rounded-full transition flex-shrink-0 ${shuffle?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400':'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title={shuffle?"隨機":"隨機"}>
+                     <Shuffle size={16}/>
+                   </button>
+                   <button onClick={prev} className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full flex-shrink-0">
+                     <SkipBack size={16}/>
+                   </button>
+                   <button onClick={next} className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full flex-shrink-0">
+                     <SkipForward size={16}/>
+                   </button>
+                 </>
+               )}
+             </div>
+         </div>
       </div>
 
       {/* 詳細資訊與清單 */}
