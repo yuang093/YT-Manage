@@ -813,21 +813,18 @@ const PlayerView = ({ item, setView, recordDownload }) => {
              
              {/* 右側：功能按鈕 */}
              <div className="flex items-center space-x-2 sm:space-x-4">
-               {/* 1. 音量控制滑桿 */}
-               <div className="flex items-center group relative">
-                  <button onClick={toggleMute} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                    {volume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
+               <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 rounded-full px-2 py-1">
+                  <button onClick={toggleMute} className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    {volume === 0 ? <VolumeX size={18}/> : <Volume2 size={18}/>}
                   </button>
-                  <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300 flex items-center">
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={volume} 
-                      onChange={handleVolumeChange}
-                      className="w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-gray-400 ml-1"
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-16 sm:w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-gray-400 mx-1"
+                  />
                </div>
 
                {/* 循環模式按鈕 */}
