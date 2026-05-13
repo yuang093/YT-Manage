@@ -4,8 +4,8 @@ import { useState, useCallback } from 'react';
 export const useNotification = () => {
   const [notification, setNotification] = useState(null);
 
-  const showNotification = useCallback((message, type = 'info') => {
-    setNotification({ message, type });
+  const showNotification = useCallback((msg, type = 'success') => {
+    setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3000);
   }, []);
 

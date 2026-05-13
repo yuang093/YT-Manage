@@ -64,6 +64,7 @@ import SortDropdown from './components/Dashboard/SortDropdown';
 import Dashboard from './components/Dashboard/Dashboard';
 import { useFavorites } from './hooks/useFavorites';
 import { useHistory } from './hooks/useHistory';
+import { useNotification } from './hooks/useNotification';
 import AdminPanel from './components/Admin/AdminPanel';
 import LoginView from './components/Login/LoginView';
 import Header from './components/Header/Header';
@@ -1052,7 +1053,7 @@ export default function App() {
   const [editItem, setEditItem] = useState(null);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [notification, setNotification] = useState(null);
+  const { notification, showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [permErr, setPermErr] = useState(false);
   // 6. 訪客計數 (LocalStorage 模擬)
@@ -1110,8 +1111,6 @@ export default function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
-
-  const showNotification = (msg, type='success') => { setNotification({msg, type}); setTimeout(()=>setNotification(null), 3000); };
 
   const handleCreate = async (item) => {
     const newItem = { ...item, id: generateId(), createdAt: Date.now(), visits: 0, downloads: 0 };
