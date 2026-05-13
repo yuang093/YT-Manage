@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="transition-colors duration-300">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
@@ -17,20 +17,10 @@
       })();
     </script>
     <style>
-      html.dark {
-        background-color: #111827;
-        color: #f3f4f6;
-      }
-      html:not(.dark) {
-        background-color: #f3f4f6;
-        color: #111827;
-      }
-      html.transition-colors {
-        transition: background-color 0.3s ease, color 0.3s ease;
-      }
+      html { transition: background-color 0.3s ease, color 0.3s ease; }
     </style>
   </head>
-  <body>
+  <body class="transition-colors duration-300">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
