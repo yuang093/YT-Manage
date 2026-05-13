@@ -10,7 +10,7 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V18.1</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V18.2</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">
@@ -29,14 +29,23 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             {autoDarkMode ? <Clock size={16} /> : <Clock size={16} className="opacity-50"/>}
           </button>
           
-          <a 
-            href="https://service.jkopay.com/r/transfer?j=Transfer:901055756" 
-            target="_blank" 
+          <a
+            href="https://service.jkopay.com/r/transfer?j=Transfer:901055756"
+            target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-2 rounded-md text-sm font-medium bg-yellow-500 hover:bg-yellow-600 text-gray-900 flex items-center transition-colors"
+            className="relative px-3 py-2 rounded-md text-sm font-medium overflow-hidden group transition-all duration-300"
             title="斗內"
           >
-            <Heart className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">斗內</span>
+            {/* 科技風格背景 */}
+            <span className="absolute inset-0 bg-gradient-to-r from-green-500 via-emerald-400 to-teal-500 opacity-80 group-hover:opacity-100 transition-opacity"></span>
+            <span className="absolute inset-0 bg-green-500/20 group-hover:bg-green-500/30 transition-colors"></span>
+            {/* 閃爍光效 */}
+            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-300 to-transparent opacity-0 group-hover:opacity-70 animate-[shimmer_2s_ease-in-out_infinite]"></span>
+            {/* 按鈕內容 */}
+            <span className="relative z-10 flex items-center text-white drop-shadow-lg">
+              <Heart className="w-4 h-4 mr-1 animate-pulse" />
+              <span className="hidden sm:inline">斗內</span>
+            </span>
           </a>
           
           <button onClick={() => setView('create')} className="px-3 py-2 rounded-md text-sm font-medium hover:bg-red-700 dark:hover:bg-red-800 flex items-center transition-colors">
