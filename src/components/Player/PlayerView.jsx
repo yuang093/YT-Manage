@@ -683,7 +683,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                     max="100"
                     value={volume}
                     onChange={handleVolumeChange}
-                    className="w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-gray-400 ml-1"
+                    className="w-20 cursor-pointer"
+                    style={{ height: '8px' }}
                   />
                </div>
 
