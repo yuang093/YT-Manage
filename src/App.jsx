@@ -808,13 +808,13 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                 </button>
                 <div className="hidden sm:block min-w-0">
                   <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Now Playing</div>
-                  <div className="font-medium text-gray-900 dark:text-white truncate max-w-[100px] sm:max-w-[150px] text-sm">{curTitle}</div>
+                  <div className="font-medium text-gray-900 dark:text-white truncate max-w-[100px] sm:max-w-[150px] text-sm">{item.title}</div>
                 </div>
              </div>
 
              {/* 行動版：只有曲名 + 播放鈕 */}
              <div className="flex-1 sm:hidden min-w-0 mx-2">
-               <div className="font-medium text-gray-900 dark:text-white truncate text-sm">{curTitle}</div>
+               <div className="font-medium text-gray-900 dark:text-white truncate text-sm">{item.title}</div>
              </div>
 
              {/* 右側主要功能：音量 + 循環 + 睡眠定時器 */}
