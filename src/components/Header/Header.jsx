@@ -10,7 +10,7 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             <Youtube className="w-8 h-8 mr-2" />
             <Zap className="w-4 h-4 absolute -top-1 -right-1 text-yellow-400 animate-pulse" />
           </div>
-          <span className="font-bold text-xl tracking-tight">YT 管理大師 V18.9</span>
+          <span className="font-bold text-xl tracking-tight">YT 管理大師 V19</span>
           {isLoading && <span className="ml-3 flex items-center text-xs bg-red-700 dark:bg-red-950 px-2 py-1 rounded text-white opacity-80"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> 同步中...</span>}
         </div>
         <div className="flex items-center space-x-4">

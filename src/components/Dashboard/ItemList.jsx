@@ -30,9 +30,10 @@ export const ItemList = ({ items, viewItem, favorites, toggleFavorite, showHisto
               <div className="flex items-center flex-1 cursor-pointer" onClick={() => viewItem(item)}>
                 {thumbnail ? (
                   <div className="relative mr-4 flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
-                    <img 
-                      src={thumbnail} 
+                    <img
+                      src={thumbnail}
                       alt={item.title}
+                      loading="lazy"
                       className="w-28 h-16 object-cover rounded-xl shadow-md group-hover:shadow-xl transition-all duration-200"
                       onError={(e) => { e.target.style.display = 'none'; }}
                     />
