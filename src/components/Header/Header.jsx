@@ -33,16 +33,17 @@ export const Header = ({ setView, isAdmin, handleLogout, isLoading, isDarkMode, 
             href="https://service.jkopay.com/r/transfer?j=Transfer:901055756"
             target="_blank"
             rel="noopener noreferrer"
-            className="relative px-3 py-2 rounded-md text-sm font-medium overflow-hidden group transition-all duration-300"
+            className="relative px-3 py-2 rounded-md text-sm font-bold overflow-hidden group transition-all duration-300"
             title="斗內"
           >
             {/* 科技風格背景 */}
-            <span className="absolute inset-0 bg-gradient-to-r from-green-500 via-emerald-400 to-teal-500 opacity-80 group-hover:opacity-100 transition-opacity"></span>
-            <span className="absolute inset-0 bg-green-500/20 group-hover:bg-green-500/30 transition-colors"></span>
-            {/* 閃爍光效 */}
-            <span className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-300 to-transparent opacity-0 group-hover:opacity-70 animate-[shimmer_2s_ease-in-out_infinite]"></span>
+            <span className="absolute inset-0 bg-gradient-to-r from-green-600 via-emerald-500 to-teal-500 opacity-90 group-hover:opacity-100 transition-opacity rounded-md"></span>
+            {/* 格子光澤效果 */}
+            <span className="absolute inset-0 opacity-30 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.1)_50%,transparent_75%)] bg-[length:200%_100%] group-hover:bg-[position:100%_0] transition-all duration-500"></span>
+            {/* 底部發光 */}
+            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-green-400 blur-sm opacity-60 group-hover:opacity-100 transition-opacity"></span>
             {/* 按鈕內容 */}
-            <span className="relative z-10 flex items-center text-white drop-shadow-lg">
+            <span className="relative z-10 flex items-center text-green-50 font-bold tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
               <Heart className="w-4 h-4 mr-1 animate-pulse" />
               <span className="hidden sm:inline">斗內</span>
             </span>
