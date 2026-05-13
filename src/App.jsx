@@ -864,16 +864,16 @@ const PlayerView = ({ item, setView, recordDownload }) => {
              </div>
          </div>
 
-         {/* 次要功能列 - 第二行：横向滾動（手機友好） */}
-         <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide" style={{WebkitOverflowScrolling: 'touch'}}>
-             {/* 左側狀態（跟隨滾動） */}
-             <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 mr-2">
-               {isPiP && <span className="mr-2">📺</span>}
-               {sleepTimer > 0 && <span className="hidden sm:inline">⏰ {sleepTimer}分鐘</span>}
+         {/* 次要功能列 - 第二行：桌面靜音/手機橫向滾動 */}
+         <div className="hidden sm:flex items-center justify-between flex-wrap gap-2">
+             {/* 左側：播放器狀態 */}
+             <div className="text-xs text-gray-500 dark:text-gray-400">
+               {isPiP && <span className="mr-2">📺 畫中畫</span>}
+               {sleepTimer > 0 && <span>⏰ {sleepTimer}分鐘</span>}
              </div>
 
-             {/* 右側：次要功能按鈕 - 横向排列，可滾動 */}
-             <div className="flex items-center space-x-0.5 sm:space-x-1">
+             {/* 右側：次要功能按鈕 */}
+             <div className="flex items-center space-x-1">
                {/* 畫中畫 */}
                <button
                  onClick={togglePiP}
