@@ -658,55 +658,53 @@ const PlayerView = ({ item, setView, recordDownload }) => {
             <span>{formatDuration(duration)}</span>
          </div>
 
-         <div className="flex items-center justify-between flex-wrap gap-4">
-             {/* 左側：播放控制 */}
-             <div className="flex items-center space-x-4">
+         {/* 主控制列 - 第一行：主要控制項 */}
+         <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4 mb-2">
+             {/* 左側：播放控制 + 音量 */}
+             <div className="flex items-center space-x-3 sm:space-x-4">
                 <button onClick={togglePlay} className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow-lg flex-shrink-0">
                   {isPlaying ? <Pause size={24} fill="currentColor"/> : <Play size={24} fill="currentColor" className="ml-1"/>}
                 </button>
                 <div className="min-w-0">
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase">Now Playing</div>
-                  <div className="font-medium text-gray-900 dark:text-white truncate max-w-[150px] sm:max-w-[200px]">{curTitle}</div>
+                  <div className="font-medium text-gray-900 dark:text-white truncate max-w-[120px] sm:max-w-[180px]">{curTitle}</div>
                 </div>
              </div>
-             
-             {/* 右側：功能按鈕 */}
-             <div className="flex items-center space-x-2 sm:space-x-4">
-               {/* 1. 音量控制滑桿 */}
-               <div className="flex items-center group relative">
-                  <button onClick={toggleMute} className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                    {volume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
+
+             {/* 右側主要功能：音量 + 循環 + 睡眠定時器 */}
+             <div className="flex items-center space-x-1 sm:space-x-2">
+               {/* 音量控制 - 固定顯示，不展開 */}
+               <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 rounded-full px-2 py-1">
+                  <button onClick={toggleMute} className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    {volume === 0 ? <VolumeX size={18}/> : <Volume2 size={18}/>}
                   </button>
-                  <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300 flex items-center">
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={volume} 
-                      onChange={handleVolumeChange}
-                      className="w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-gray-400 ml-1"
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-16 sm:w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-600 dark:accent-gray-400 mx-1"
+                  />
                </div>
 
-               {/* 循環模式按鈕 */}
-                 <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                 <button 
-                   onClick={() => setLoopMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')} 
-                   className={`p-2 rounded-full transition ${
-                     loopMode !== 'none' 
-                       ? loopMode === 'one'
-                         ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400'
-                         : 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
-                       : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
-                   }`}
-                   title={loopMode === 'none' ? '關閉循環' : loopMode === 'all' ? '列表循環' : '單曲循環'}
-                 >
-                   {loopMode === 'one' ? <Repeat1 size={20}/> : <Repeat size={20}/>}
-                 </button>
+               {/* 循環模式 */}
+               <button
+                 onClick={() => setLoopMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')}
+                 className={`p-2 rounded-full transition ${
+                   loopMode !== 'none'
+                     ? loopMode === 'one'
+                       ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400'
+                       : 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
+                     : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                 }`}
+                 title={loopMode === 'none' ? '關閉循環' : loopMode === 'all' ? '列表循環' : '單曲循環'}
+               >
+                 {loopMode === 'one' ? <Repeat1 size={18}/> : <Repeat size={18}/>}
+               </button>
 
                {/* 睡眠定時器 */}
-               <button 
+               <button
                  onClick={() => setSleepTimer(t => {
                    if (t >= 120) return 0;
                    return t === 0 ? 15 : t === 15 ? 30 : t === 30 ? 60 : t === 60 ? 90 : 120;
@@ -714,154 +712,163 @@ const PlayerView = ({ item, setView, recordDownload }) => {
                  className={`p-2 rounded-full transition ${sleepTimer > 0 ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                  title={sleepTimer > 0 ? `睡眠定時: ${sleepTimer}分鐘` : '睡眠定時器'}
                >
-                 <Clock size={20}/>
-                 {sleepTimer > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center">{sleepTimer}</span>}
+                 <Clock size={18}/>
                </button>
+             </div>
+         </div>
 
+         {/* 次要功能列 - 第二行：辅助功能 */}
+         <div className="flex items-center justify-between flex-wrap gap-2 border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+             {/* 左側：播放器狀態 */}
+             <div className="text-xs text-gray-500 dark:text-gray-400">
+               {isPiP && <span className="mr-2">📺 畫中畫</span>}
+               {sleepTimer > 0 && <span>⏰ {sleepTimer}分鐘</span>}
+             </div>
+
+             {/* 右側：次要功能按鈕 */}
+             <div className="flex items-center space-x-1 sm:space-x-2">
                {/* 畫中畫 */}
-               <button 
+               <button
                  onClick={togglePiP}
                  className={`p-2 rounded-full transition ${isPiP ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                  title="畫中畫"
                >
-                 <Monitor size={20}/>
+                 <Monitor size={18}/>
                </button>
 
                {/* 分享 */}
-               <button 
+               <button
                  onClick={shareVideo}
                  className="p-2 text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
                  title="分享"
                >
-                 <Share2 size={20}/>
+                 <Share2 size={18}/>
                </button>
 
                {/* 歌詞 */}
-               <button 
+               <button
                  onClick={() => { setShowLyrics(!showLyrics); if (!showLyrics && lyrics.includes('點擊上方按鈕')) searchLyrics(); }}
                  className={`p-2 rounded-full transition ${showLyrics ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                  title="歌詞"
                >
-                 <Mic size={20}/>
+                 <Mic size={18}/>
                </button>
 
                {/* 統計 */}
-               <button 
+               <button
                  onClick={() => setShowStats(!showStats)}
                  className={`p-2 rounded-full transition ${showStats ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                  title="播放統計"
                >
-                 <BarChart2 size={20}/>
+                 <BarChart2 size={18}/>
                </button>
 
                {/* 快捷鍵說明 */}
-               <button 
+               <button
                  onClick={() => setShowHelp(!showHelp)}
                  className={`p-2 rounded-full transition ${showHelp ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                  title="快捷鍵 (?)"
                >
-                 <HelpCircle size={20}/>
+                 <HelpCircle size={18}/>
                </button>
-                 
-                 {/* 播放速度 */}
+
+               {/* 播放速度 */}
+               <div className="relative group">
+                 <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center text-xs">
+                   <Gauge size={14} className="mr-1" />
+                   {playbackSpeed}x
+                 </button>
+                 <div className="absolute right-0 mt-1 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                   {speedOptions.map(speed => (
+                     <button
+                       key={speed}
+                       onClick={() => setPlaybackSpeed(speed)}
+                       className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
+                           playbackSpeed === speed
+                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                             : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                       }`}
+                     >
+                       {speed}x
+                     </button>
+                   ))}
+                 </div>
+               </div>
+
+               {/* 畫質選擇 */}
+               {availableQualities.length > 0 && (
                  <div className="relative group">
                    <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center text-xs">
-                     <Gauge size={16} className="mr-1" />
-                     {playbackSpeed}x
+                     <Settings size={14} className="mr-1" />
+                     {selectedQuality}
                    </button>
-                   <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                     {speedOptions.map(speed => (
+                   <div className="absolute right-0 mt-1 w-20 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                     {availableQualities.map(q => (
                        <button
-                         key={speed}
-                         onClick={() => setPlaybackSpeed(speed)}
+                         key={q}
+                         onClick={() => setQuality(q)}
                          className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
-                           playbackSpeed === speed 
-                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
+                           selectedQuality === q
+                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
                              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
                          }`}
                        >
-                         {speed}x
+                         {q}
                        </button>
                      ))}
                    </div>
                  </div>
+               )}
 
-                 {/* 畫質選擇 */}
-                 {availableQualities.length > 0 && (
-                   <div className="relative group">
-                     <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center text-xs">
-                       <Settings size={16} className="mr-1" />
-                       {selectedQuality}
-                     </button>
-                     <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                       {availableQualities.map(q => (
-                         <button
-                           key={q}
-                           onClick={() => setQuality(q)}
-                           className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
-                             selectedQuality === q 
-                               ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
-                               : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                           }`}
-                         >
-                           {q}
-                         </button>
-                       ))}
-                     </div>
-                   </div>
-                 )}
-                 
-                 {/* 定時關閉 */}
-                 <div className="relative group">
-                   <button 
-                     className={`p-2 rounded-full flex items-center text-xs ${
-                       sleepTimer > 0 
-                         ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' 
-                         : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
-                     }`}
-                     title={sleepTimer > 0 ? `${sleepTimer}分鐘後停止` : '定時關閉'}
-                   >
-                     <Timer size={18} />
-                     {sleepTimer > 0 && <span className="ml-1">{sleepTimer}</span>}
-                   </button>
-                   <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                     {[0, 15, 30, 45, 60, 90].map(mins => (
-                       <button
-                         key={mins}
-                         onClick={() => setSleepTimer(mins)}
-                         className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
-                           sleepTimer === mins 
-                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' 
+               {/* 定時關閉 */}
+               <div className="relative group">
+                 <button
+                   className={`p-2 rounded-full flex items-center text-xs ${
+                     sleepTimer > 0
+                       ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400'
+                       : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                   }`}
+                   title={sleepTimer > 0 ? `${sleepTimer}分鐘後停止` : '定時關閉'}
+                 >
+                   <Timer size={16} />
+                 </button>
+                 <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                   {[0, 15, 30, 45, 60, 90].map(mins => (
+                     <button
+                       key={mins}
+                       onClick={() => setSleepTimer(mins)}
+                       className={`w-full px-3 py-1.5 text-xs first:rounded-t-lg last:rounded-b-lg ${
+                           sleepTimer === mins
+                             ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
                              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                         }`}
-                       >
-                         {mins === 0 ? '關閉' : `${mins} 分鐘`}
-                       </button>
-                     ))}
-                   </div>
+                       }`}
+                     >
+                       {mins === 0 ? '關閉' : `${mins} 分鐘`}
+                     </button>
+                   ))}
                  </div>
-                 
-                 {item.type === 'playlist' && (
+               </div>
+
+               {item.type === 'playlist' && (
                  <>
-                   <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                   {/* V10 新功能：歌單內隨機播放 - 重新洗牌按鈕 */}
-                <button onClick={() => {
-                  const indices = Array.from({ length: vList.length }, (_, i) => i);
-                  for (let i = indices.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [indices[i], indices[j]] = [indices[j], indices[i]];
-                  }
-                  // 確保目前播放的歌在第一個
-                  const currentIdxInShuffled = indices.indexOf(idx);
-                  if (currentIdxInShuffled !== -1 && currentIdxInShuffled !== 0) {
-                    [indices[0], indices[currentIdxInShuffled]] = [indices[currentIdxInShuffled], indices[0]];
-                  }
-                  setShuffledIndices(indices);
-                  setIdx(indices[0]);
-                }} className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="重新洗牌"><Shuffle size={18} className="transform rotate-180"/></button>
-                <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full transition ${shuffle?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400':'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={20}/></button>
-                   <button onClick={prev} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipBack size={20}/></button>
-                   <button onClick={next} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipForward size={20}/></button>
+                   <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                   {/* 歌單功能：隨機播放 + 上一首/下一首 */}
+                   <button onClick={() => {
+                     const indices = Array.from({ length: vList.length }, (_, i) => i);
+                     for (let i = indices.length - 1; i > 0; i--) {
+                       const j = Math.floor(Math.random() * (i + 1));
+                       [indices[i], indices[j]] = [indices[j], indices[i]];
+                     }
+                     const currentIdxInShuffled = indices.indexOf(idx);
+                     if (currentIdxInShuffled !== -1 && currentIdxInShuffled !== 0) {
+                       [indices[0], indices[currentIdxInShuffled]] = [indices[currentIdxInShuffled], indices[0]];
+                     }
+                     setShuffledIndices(indices);
+                     setIdx(indices[0]);
+                   }} className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="重新洗牌"><Shuffle size={16} className="transform rotate-180"/></button>
+                   <button onClick={()=>setShuffle(!shuffle)} className={`p-2 rounded-full transition ${shuffle?'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400':'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title={shuffle?"隨機播放開啟":"隨機播放關閉"}><Shuffle size={18}/></button>
+                   <button onClick={prev} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipBack size={18}/></button>
+                   <button onClick={next} className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><SkipForward size={18}/></button>
                  </>
                )}
              </div>
