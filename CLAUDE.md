@@ -38,6 +38,12 @@ npm run preview  # 預覽建置結果
 - 部署 URL: https://yt-manage.vercel.app
 - 觸發重新部署後約需 1-2 分鐘完成
 
+### 版本管理
+- **每次 commit 前必須更新版本號**（Header.jsx 中的 Vxx.x）
+- 版本格式：V18.1 → V18.2 → V18.3 ...
+- 用戶需要能看到版本變動來確認更新是否生效
+- 例行性：先改版本號，再 commit，这样不会忘记
+
 ### 重要提醒
 - 修改 PlayerView 控制列樣式時，**必須改 App.jsx** (line 802-1016 區域)，而非 components/Player/PlayerView.jsx
 - 所有修改完成後需 commit + push 才會觸發 Vercel 部署
