@@ -1,10 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="transition-colors duration-300">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>yt-manager</title>
+    <script>
+      // 防止閃爍：頁面載入前先套用主題
+      (function() {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+    <style>
+      html.dark {
+        background-color: #111827;
+        color: #f3f4f6;
+      }
+      html:not(.dark) {
+        background-color: #f3f4f6;
+        color: #111827;
+      }
+      html.transition-colors {
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
