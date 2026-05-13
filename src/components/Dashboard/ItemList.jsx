@@ -21,10 +21,9 @@ export const ItemList = ({ items, viewItem, favorites, toggleFavorite, showHisto
         const isFavorite = favorites.includes(item.id);
 
         return (
-          <li 
+          <li
             key={item.id}
-            className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-200 hover:shadow-md group"
-            style={{ animation: 'fadeInUp 0.3s ease-out forwards', animationDelay: `${idx * 50}ms`, opacity: 0 }}
+            className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-all duration-200 hover:shadow-md group item-card"
           >
             <div className="px-6 py-4 flex items-center justify-between">
               {/* 左側：縮圖 + 標題 */}
