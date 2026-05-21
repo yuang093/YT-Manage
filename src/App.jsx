@@ -402,12 +402,38 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         setNeedsUserGesture(false);
         setDuration(playerRef.current.getDuration());
         if (progressInterval.current) clearInterval(progressInterval.current);
+
+        let lastTime = 0;
+        let stalledCount = 0;
+        const STALL_THRESHOLD = 3;
+
         progressInterval.current = setInterval(() => {
           if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
-            setCurrentTime(playerRef.current.getCurrentTime());
+            const currentTime = playerRef.current.getCurrentTime();
+            const duration = playerRef.current.getDuration?.() || 0;
+
+            // 偵測時間停滯（背景分頁或被節流時）
+            if (currentTime === lastTime && lastTime > 0) {
+              stalledCount++;
+            } else {
+              stalledCount = 0;
+              lastTime = currentTime;
+            }
+
+            // 如果停滯超過閾值且快播完，視為播完並跳下一首
+            if (stalledCount >= STALL_THRESHOLD && duration > 0 && currentTime >= duration - 2) {
+              stalledCount = 0;
+              if (nextRef.current && !isTransitioningRef.current) {
+                isTransitioningRef.current = true;
+                nextRef.current();
+                setTimeout(() => { isTransitioningRef.current = false; }, 500);
+              }
+            }
+
+            setCurrentTime(currentTime);
+            setTotalStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
+            lastProgressUpdateRef.current = Date.now();
           }
-          setTotalStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
-          lastProgressUpdateRef.current = Date.now();
         }, 1000);
       } else {
         if (state === window.YT.PlayerState.PAUSED) setIsPlaying(false);
