@@ -179,18 +179,26 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   const [playlistSearch, setPlaylistSearch] = useState('');
   
   // 播放列表搜尋過濾
-  const filteredPlaylist = vList.filter(item => 
-    !playlistSearch || 
+  const filteredPlaylist = vList.filter(item =>
+    !playlistSearch ||
     (item && item.toLowerCase().includes(playlistSearch.toLowerCase()))
   );
-  
+
   // 1. 音量控制 (State)
-  const [volume, setVolume] = useState(100); 
+  const [volume, setVolume] = useState(100);
   const [isMuted, setIsMuted] = useState(false);
   const previousVolume = useRef(100);
 
   // 7. Fisher-Yates 隨機播放佇列
   const [shuffledIndices, setShuffledIndices] = useState([]);
+
+  // 新增：狀態追蹤
+  const [isMobile, setIsMobile] = useState(false);
+  const [needsUserGesture, setNeedsUserGesture] = useState(false);
+  const endedAtRef = useRef(null);
+  const lastProgressUpdateRef = useRef(Date.now());
+  const isTransitioningRef = useRef(false);
+  const lastPlayerStateRef = useRef(-1);
 
   const playerRef = useRef(null);
   const containerRef = useRef(null);
@@ -226,6 +234,17 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   }, [item]);
 
+  // 偵測是否為行動裝置
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // 當清單載入或 shuffle 切換時，產生新的隨機佇列
   useEffect(() => {
     if (vList.length > 0) {
@@ -246,16 +265,28 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     }
   }, [vList, shuffle]); // 注意: idx 不放入依賴，避免每次換歌都重洗
 
-  // 新功能：當分頁恢復可見時，檢查是否需要跳到下一首
+  // Phase 1.1: 當分頁恢復可見時，檢查是否需要跳到下一首（增強版）
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && playerRef.current && isPlaying) {
-        // 分頁變可見，檢查播放進度
-        const currentTime = playerRef.current.getCurrentTime?.() || 0;
-        const duration = playerRef.current.getDuration?.() || 0;
-        // 如果快要播完（倒數 3 秒內）或已結束，主動跳下一首
-        if (duration > 0 && currentTime >= duration - 3 && nextRef.current) {
+      if (document.hidden) return; // 只處理從背景恢復
+
+      if (playerRef.current) {
+        // 檢查是否有結束記錄（Phase 1.2）
+        if (endedAtRef.current && nextRef.current) {
+          endedAtRef.current = null;
           nextRef.current();
+          return;
+        }
+
+        // 檢查是否為背景停滯（Phase 1.3）
+        const now = Date.now();
+        const stalled = (now - lastProgressUpdateRef.current) > 5000;
+        if (stalled && isPlaying) {
+          const currentTime = playerRef.current.getCurrentTime?.() || 0;
+          const duration = playerRef.current.getDuration?.() || 0;
+          if (duration > 0 && currentTime >= duration - 3 && nextRef.current) {
+            nextRef.current();
+          }
         }
       }
     };
@@ -358,24 +389,42 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       playerRef.current = null;
     }
 
+    // 重置狀態
+    endedAtRef.current = null;
+    isTransitioningRef.current = false;
+
     const onStateChange = (event) => {
-      if (event.data === window.YT.PlayerState.PLAYING) {
+      const state = event.data;
+      lastPlayerStateRef.current = state;
+
+      if (state === window.YT.PlayerState.PLAYING) {
         setIsPlaying(true);
+        setNeedsUserGesture(false);
         setDuration(playerRef.current.getDuration());
         if (progressInterval.current) clearInterval(progressInterval.current);
         progressInterval.current = setInterval(() => {
-          if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') { setCurrentTime(playerRef.current.getCurrentTime()); }
+          if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function') {
+            setCurrentTime(playerRef.current.getCurrentTime());
+          }
           setTotalStats(s => ({ ...s, totalTime: s.totalTime + 1 }));
+          lastProgressUpdateRef.current = Date.now();
         }, 1000);
       } else {
-        if (event.data === window.YT.PlayerState.PAUSED) setIsPlaying(false);
-        if (event.data === window.YT.PlayerState.ENDED) {
+        if (state === window.YT.PlayerState.PAUSED) setIsPlaying(false);
+        if (state === window.YT.PlayerState.ENDED) {
+          endedAtRef.current = Date.now();
           setIsPlaying(false);
           if (loopMode === 'one' && playerRef.current?.seekTo) {
             playerRef.current.seekTo(0);
             playerRef.current.playVideo();
-          } else if (nextRef.current) {
-            nextRef.current();
+          } else if (nextRef.current && !isTransitioningRef.current) {
+            isTransitioningRef.current = true;
+            setTimeout(() => {
+              if (nextRef.current) {
+                nextRef.current();
+              }
+              isTransitioningRef.current = false;
+            }, 300);
           }
         }
         clearInterval(progressInterval.current);
@@ -394,7 +443,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           'disablekb': 1,
           'fs': 0,
           'rel': 0,
-          'iv_load_policy': 3
+          'iv_load_policy': 3,
+          'mute': 1  // Phase 2: 靜音啟動以相容行動裝置
         },
         events: {
           'onStateChange': onStateChange,
@@ -402,7 +452,12 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           'onReady': (e) => {
             setDuration(e.target.getDuration());
             e.target.setVolume(volume);
-            e.target.playVideo();
+            if (isMobile) {
+              // Phase 2: 行動裝置需要使用者互動才能播放
+              setNeedsUserGesture(true);
+            } else {
+              e.target.playVideo();
+            }
           }
         }
       });
@@ -410,7 +465,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
     return () => {
       console.log('[Player] Cleanup');
-      
+
       // 先清除 interval，再摧毀 player
       if (progressInterval.current) {
         clearInterval(progressInterval.current);
@@ -421,7 +476,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
         playerRef.current = null;
       }
     };
-  }, [isApiReady, videoId]);  // 加入 audio - 每次切換都重建播放器
+  }, [isApiReady, videoId]);
 
   // audio 模式切換偵錯
   useEffect(() => {
@@ -434,12 +489,24 @@ const PlayerView = ({ item, setView, recordDownload }) => {
   }, [audio]);
 
   const togglePlay = () => {
-    if (!playerRef.current || typeof playerRef.current.getPlayerState !== 'function') return;
-    const state = playerRef.current.getPlayerState();
+    if (!playerRef.current) return;
+
+    // Phase 4: 安全的播放切換
+    const state = playerRef.current.getPlayerState?.() ?? -1;
+
+    if (needsUserGesture) {
+      // Phase 2.3: 第一次互動時取消靜音並播放
+      playerRef.current.unMute?.();
+      setIsMuted(false);
+      setNeedsUserGesture(false);
+    }
+
     if (state === window.YT.PlayerState.PLAYING) {
       playerRef.current.pauseVideo();
+      setIsPlaying(false);
     } else {
       playerRef.current.playVideo();
+      setIsPlaying(true);  // Phase 4: 立即更新 UI
     }
   };
 
@@ -623,15 +690,20 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
   // 循環模式 + 隨機播放邏輯
   const next = () => {
+    // 防止重複觸發
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+
     // 單曲循環
     if (loopMode === 'one') {
       if (playerRef.current && playerRef.current.seekTo) {
         playerRef.current.seekTo(0);
         playerRef.current.playVideo();
       }
+      isTransitioningRef.current = false;
       return;
     }
-    
+
     // 列表循環 or 隨機
     let nextIdx;
     if (shuffle) {
@@ -641,7 +713,7 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     } else {
       nextIdx = (idx + 1) % vList.length;
     }
-    
+
     // 如果是列表循環且到達末尾
     if (loopMode === 'all' && nextIdx === 0 && !shuffle) {
       // 重新隨機排序
@@ -653,11 +725,24 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       setShuffledIndices(indices);
       nextIdx = indices[0];
     }
-    
+
+    // Phase 4.4: 延遲後切換並播放，確保狀態同步
     setIdx(nextIdx);
+    setIsPlaying(true);  // Phase 4: 立即更新 UI
+
+    setTimeout(() => {
+      if (playerRef.current) {
+        playerRef.current.playVideo();
+      }
+      isTransitioningRef.current = false;
+    }, 300);
   };
 
   const prev = () => {
+    // 防止重複觸發
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+
     if (shuffle) {
       const currentPos = shuffledIndices.indexOf(idx);
       const prevPos = (currentPos - 1 + shuffledIndices.length) % shuffledIndices.length;
@@ -665,6 +750,15 @@ const PlayerView = ({ item, setView, recordDownload }) => {
     } else {
       setIdx(prevIdx => (prevIdx - 1 + vList.length) % vList.length);
     }
+
+    // Phase 4.4: 延遲後播放
+    setIsPlaying(true);
+    setTimeout(() => {
+      if (playerRef.current) {
+        playerRef.current.playVideo();
+      }
+      isTransitioningRef.current = false;
+    }, 300);
   };
 
   const openLink = () => { window.open(curUrl, '_blank'); recordDownload(item.id); };
@@ -837,20 +931,27 @@ const PlayerView = ({ item, setView, recordDownload }) => {
 
              {/* 右側主要功能：音量 + 循環 + 睡眠定時器 */}
              <div className="flex items-center space-x-1">
-               {/* 音量控制 - 固定顯示，方便觸控 */}
-               <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 rounded-full px-2 py-1.5 sm:py-1 touch-manipulation">
-                  <button onClick={toggleMute} className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 p-1">
-                    {volume === 0 ? <VolumeX size={18}/> : <Volume2 size={18}/>}
-                  </button>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={volume}
-                    onChange={handleVolumeChange}
-                    className="w-14 sm:w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-red-600 mx-0.5"
-                  />
-               </div>
+               {/* Phase 3: 行動裝置隱藏音量控制 */}
+               {!isMobile && (
+                 <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 rounded-full px-2 py-1.5 sm:py-1 touch-manipulation">
+                    <button onClick={toggleMute} className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 p-1">
+                      {volume === 0 ? <VolumeX size={18}/> : <Volume2 size={18}/>}
+                    </button>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={volume}
+                      onChange={handleVolumeChange}
+                      className="w-14 sm:w-20 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-red-600 mx-0.5"
+                    />
+                 </div>
+               )}
+               {isMobile && (
+                 <div className="text-xs text-gray-400 dark:text-gray-500 px-2">
+                   🔊 請使用裝置按鍵調整音量
+                 </div>
+               )}
 
                {/* 循環模式 - 桌面顯示文字標籤 */}
                <button
