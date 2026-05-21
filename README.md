@@ -1,16 +1,158 @@
-# React + Vite
+# YT 管理大師
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> YouTube 播放清單管理工具，輕鬆整理、播放你的最愛影片
 
-Currently, two official plugins are available:
+**版本**：V19.1 | **部署**：https://yt-manage.vercel.app
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 📋 功能特色
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 核心功能
+| 功能 | 說明 |
+|------|------|
+| 🎵 **播放清單管理** | 支援單一曲線和播放清單（多首歌曲） |
+| ☁️ **雲端儲存** | Firebase Firestore 即時同步 |
+| ▶️ **網頁播放器** | 內建 YouTube IFrame 播放器 |
+| ❤️ **收藏功能** | 一鍵收藏最愛項目 |
+| 📜 **播放歷史** | 記錄最近播放的 20 首歌曲 |
+| 📊 **統計面板** | 顯示瀏覽次數、下載次數等 |
 
-## Expanding the ESLint configuration
+### UI/UX 功能
+| 功能 | 說明 |
+|------|------|
+| 🌙 **深色模式** | 一鍵切換深色/淺色主題 |
+| ⏰ **自動深夜模式** | 22:00-06:00 自動切換暗色 |
+| 🔍 **搜尋過濾** | 依標題、分類即時搜尋 |
+| 📁 **排序功能** | 依時間、標題、瀏覽量排序 |
+| 📥 **CSV 匯入/匯出** | 批次管理你的播放清單 |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 後台管理
+| 功能 | 說明 |
+|------|------|
+| ✏️ **編輯項目** | 修改標題、說明、內容 |
+| 🗑️ **刪除項目** | 支援單一刪除和批量刪除 |
+| ⬆️ **匯入 CSV** | 批次新增項目 |
+| ⬇️ **匯出 CSV** | 備份你的資料庫 |
+
+---
+
+## 🛠️ 技術架構
+
+| 技術 | 名稱 |
+|------|------|
+| ⚛️ **前端框架** | React 19 |
+| 🔧 **建置工具** | Vite (rolldown-vite) |
+| 🎨 **樣式框架** | TailwindCSS 3.4 |
+| ☁️ **資料庫** | Firebase Firestore |
+| 🎬 **播放器** | YouTube IFrame API |
+| 🔔 **圖示庫** | Lucide React |
+
+### 專案結構
+
+```
+yt-manage/
+├── src/
+│   ├── App.jsx              # 主應用程式 (核心邏輯)
+│   ├── components/
+│   │   ├── Header/          # 導航列
+│   │   ├── Dashboard/       # 主儀表板
+│   │   ├── Form/            # 新增/編輯表單
+│   │   ├── Admin/           # 後台管理
+│   │   └── Login/           # 管理員登入
+│   ├── hooks/               # 自訂 Hooks
+│   │   ├── useFirebase.js   # Firebase CRUD
+│   │   ├── useFavorites.js  # 收藏功能
+│   │   ├── useHistory.js    # 播放歷史
+│   │   └── useNotification.js # 通知系統
+│   ├── context/             # React Context
+│   │   ├── ThemeContext.jsx  # 深色模式
+│   │   └── NotificationContext.jsx # 通知
+│   └── utils/                # 工具函式
+│       ├── youtube.js       # YouTube 解析
+│       ├── format.js        # 格式化
+│       └── csv.js           # CSV 處理
+├── dist/                    # 生產建置
+└── public/                  # 靜態資源
+```
+
+---
+
+## 🚀 快速開始
+
+### 安裝依賴
+
+```bash
+npm install
+```
+
+### 開發模式
+
+```bash
+npm run dev
+```
+
+啟動後開啟 http://localhost:5173
+
+### 建置生產版本
+
+```bash
+npm run build
+```
+
+### 程式碼檢查
+
+```bash
+npm run lint
+```
+
+### 預覽建置結果
+
+```bash
+npm run preview
+```
+
+---
+
+## 🌐 開發指令對照
+
+| 指令 | 說明 |
+|------|------|
+| `npm run dev` | 啟動開發伺服器 |
+| `npm run build` | 建置生產版本 |
+| `npm run lint` | ESLint 檢查 |
+| `npm run preview` | 預覽建置結果 |
+
+---
+
+## 📝 資料格式 (CSV)
+
+匯入 CSV 格式：
+
+```csv
+title,description,type,url
+歌曲標題,說明文字,single,https://www.youtube.com/watch?v=...
+播放清單標題,說明文字,playlist,"https://www.youtube.com/watch?v=...,https://..."
+```
+
+---
+
+## ⚙️ 版本管理
+
+每次 commit 前請更新版本號：
+
+1. 修改 `src/components/Header/Header.jsx` 中的版本號（如 V19.1 → V19.2）
+2. Commit 並 Push 觸發 Vercel 自動部署
+
+---
+
+## 🔗 相關連結
+
+- **線上使用**：https://yt-manage.vercel.app
+- **斗內連結**：https://service.jkopay.com/r/transfer?j=Transfer:901055756
+
+---
+
+## 📄 授權
+
+本專案僅供個人使用。

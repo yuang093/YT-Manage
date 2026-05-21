@@ -245,6 +245,24 @@ const PlayerView = ({ item, setView, recordDownload }) => {
       setShuffledIndices(indices);
     }
   }, [vList, shuffle]); // 注意: idx 不放入依賴，避免每次換歌都重洗
+
+  // 新功能：當分頁恢復可見時，檢查是否需要跳到下一首
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && playerRef.current && isPlaying) {
+        // 分頁變可見，檢查播放進度
+        const currentTime = playerRef.current.getCurrentTime?.() || 0;
+        const duration = playerRef.current.getDuration?.() || 0;
+        // 如果快要播完（倒數 3 秒內）或已結束，主動跳下一首
+        if (duration > 0 && currentTime >= duration - 3 && nextRef.current) {
+          nextRef.current();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isPlaying]);
   
   const curItem = vList[idx];
   const curUrl = getVideoUrl(curItem);
