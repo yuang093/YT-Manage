@@ -452,11 +452,16 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           'onReady': (e) => {
             setDuration(e.target.getDuration());
             e.target.setVolume(volume);
+            e.target.unMute();  // 取消靜音
             if (isMobile) {
               // Phase 2: 行動裝置需要使用者互動才能播放
               setNeedsUserGesture(true);
+              e.target.mute();  // 行動裝置保持靜音，等待使用者互動
             } else {
-              e.target.playVideo();
+              // 延遲播放，確保 unMute 先生效
+              setTimeout(() => {
+                e.target.playVideo();
+              }, 100);
             }
           }
         }
