@@ -443,14 +443,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           if (loopMode === 'one' && playerRef.current?.seekTo) {
             playerRef.current.seekTo(0);
             playerRef.current.playVideo();
-          } else if (nextRef.current && !isTransitioningRef.current) {
-            isTransitioningRef.current = true;
-            setTimeout(() => {
-              if (nextRef.current) {
-                nextRef.current();
-              }
-              isTransitioningRef.current = false;
-            }, 300);
+          } else if (nextRef.current) {
+            nextRef.current();
           }
         }
         clearInterval(progressInterval.current);
@@ -470,7 +464,8 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           'fs': 0,
           'rel': 0,
           'iv_load_policy': 3,
-          'mute': 1  // Phase 2: 靜音啟動以相容行動裝置
+          'mute': 1,
+          'autoplay': isMobile ? 0 : 1
         },
         events: {
           'onStateChange': onStateChange,
@@ -478,13 +473,10 @@ const PlayerView = ({ item, setView, recordDownload }) => {
           'onReady': (e) => {
             setDuration(e.target.getDuration());
             e.target.setVolume(volume);
-            e.target.unMute();  // 取消靜音
+            e.target.unMute();
             if (isMobile) {
-              // Phase 2: 行動裝置需要使用者互動才能播放
               setNeedsUserGesture(true);
-              e.target.mute();  // 行動裝置保持靜音，等待使用者互動
             } else {
-              // 延遲播放，確保 unMute 先生效
               setTimeout(() => {
                 e.target.playVideo();
               }, 100);
